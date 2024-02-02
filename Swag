@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
 
+# Function to compute distance between two sets of latitudes and longitudes
 def haversine(lon1, lat1, lon2, lat2):
-    R = 6371.0
+    R = 6371.0  # Radius of the earth in kilometers
     lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1
     dlat = lat2 - lat1
@@ -11,49 +12,38 @@ def haversine(lon1, lat1, lon2, lat2):
     distance = R * c
     return distance
 
-# Assuming 'fa_full_info_df' and 'leads_with_geo_good_df' are already defined
+# Original breakdown for ranked FAs and allocation for unranked FAs
+original_breakdown = [100, 0, 0, 0, 0, 0]  # Example breakdown for ranked FAs
+unranked_allocation = 90  # Allocation for unranked FAs
 
-# Define the original breakdown and unranked allocation
-original_breakdown = [100, 0, 0, 0, 0, 0]  # This can be any dynamic breakdown
-unranked_allocation = 90  # This can change dynamically
+# Adjusting the breakdown to include unranked FAs
+adjusted_breakdown = [b * (100 - unranked_allocation) / 100 for b in original_breakdown] + [unranked_allocation]
 
-# Mark FAs as ranked based on "Funded %"
-fa_full_info_df['Ranked'] = ~fa_full_info_df['Funded %'].isna()
+# Mark FAs as ranked or unranked based on the 'Rank' column
+fa_full_info_df['Ranked'] = fa_full_info_df['Rank'].notna()
 
-# Determine the number of ranked bins (excluding unranked FAs for now)
-num_ranked_bins = len(original_breakdown) - 1  # Reserve one bin for unranked FAs
-
-# Adjust the original breakdown to accommodate unranked FAs
-adjusted_breakdown = [b * (100 - unranked_allocation) / 100 for b in original_breakdown[:num_ranked_bins]]
-adjusted_breakdown.append(unranked_allocation)  # Add unranked allocation as the last bin
-
-# Assign ranked FAs to bins based on adjusted breakdown
-cumulative_breakdown = np.cumsum(adjusted_breakdown[:-1])  # Exclude unranked allocation
-bin_limits = len(fa_full_info_df[fa_full_info_df['Ranked']]) * np.array(cumulative_breakdown) / 100
-fa_full_info_df.loc[fa_full_info_df['Ranked'], 'Bin'] = np.digitize(range(len(fa_full_info_df[fa_full_info_df['Ranked']])), bin_limits, right=False) + 1
+# Assign ranked FAs to bins
+ranked_fas = fa_full_info_df[fa_full_info_df['Ranked']].copy()
+# Filter out bins with 0% allocation before calculating bin limits
+non_zero_bins = [b for b in adjusted_breakdown[:-1] if b > 0]
+cumulative_breakdown = np.cumsum(non_zero_bins)
+bin_limits = len(ranked_fas) * np.array(cumulative_breakdown) / 100
+ranked_fas['Bin'] = np.digitize(range(len(ranked_fas)), bin_limits, right=False) + 1
 
 # Assign unranked FAs to the last bin
-fa_full_info_df.loc[~fa_full_info_df['Ranked'], 'Bin'] = len(adjusted_breakdown)
+unranked_fas = fa_full_info_df[~fa_full_info_df['Ranked']].copy()
+unranked_fas['Bin'] = len(adjusted_breakdown)  # Last bin for unranked FAs
 
-# Calculate leads to distribute per bin
+# Combine ranked and unranked FAs
+fa_full_info_df = pd.concat([ranked_fas, unranked_fas])
+
+# Calculate the number of leads to distribute to each bin
 total_leads = len(leads_with_geo_good_df)
-max_leads_per_bin = {i + 1: total_leads * pct / 100 for i, pct in enumerate(adjusted_breakdown)}
+max_leads_per_bin = {i+1: total_leads * pct / 100 for i, pct in enumerate(adjusted_breakdown)}
 
-# Initialize lead assignment counters
-leads_assigned_per_bin = {i: 0 for i in range(1, len(adjusted_breakdown) + 1)}
+# Initialize the count of leads assigned per bin
+leads_assigned_per_bin = {i: 0 for i in range(1, len(adjusted_breakdown)+1)}
 
 # Lead assignment loop
 for index, lead_row in leads_with_geo_good_df.iterrows():
-    for bin_num in range(1, len(adjusted_breakdown) + 1):
-        if leads_assigned_per_bin[bin_num] < max_leads_per_bin[bin_num]:
-            potential_FAs = fa_full_info_df[fa_full_info_df["Bin"] == bin_num]
-
-            if not potential_FAs.empty:
-                potential_FAs['distance'] = potential_FAs.apply(lambda fa_row: haversine(lead_row['Longitude'], lead_row['Latitude'], fa_row['Longitude'], fa_row['Latitude']), axis=1)
-                closest_FA = potential_FAs.loc[potential_FAs['distance'].idxmin()]
-
-                # Assign the lead to the closest FA
-                # Update your data structure or database as necessary to reflect the assignment
-
-                leads_assigned_per_bin[bin_num] += 1
-                break  # Move to the next lead once one is assigned
+    for bin_num in
