@@ -1,4 +1,3 @@
-
 # Ensure dt2_report is a datetime column and sort the DataFrame by dates
 input_df['dt2_report'] = pd.to_datetime(input_df['dt2_report'])
 input_df.sort_values(by='dt2_report', inplace=True)
@@ -20,7 +19,7 @@ current_bd = 0  # Initialize the current business day counter
 last_month = 0  # Track the last month processed
 
 for date in unique_dates:
-    date_obj = pd.to_datetime(date)  # Convert to datetime object if not already
+    date_obj = pd.to_datetime(date)
     if date_obj.month != last_month:
         # At the start of a new month, adjust the starting business day based on the previous year's max, if not January
         if last_month > 0:
@@ -28,6 +27,15 @@ for date in unique_dates:
         last_month = date_obj.month
     current_bd += 1  # Increment the business day for each unique date
     adjusted_bds[date] = current_bd
+
+# Adjust business days for dates beyond the max BD of the previous year for each month
+for month, max_bd_previous_year in previous_year_max_bd.items():
+    # Filter dates for the current month in the most recent year
+    month_dates = [date for date in unique_dates if pd.to_datetime(date).month == month and pd.to_datetime(date).year == most_recent_year]
+    for date in month_dates:
+        # If the adjusted business day is beyond the max from the previous year, adjust it to match the max
+        if adjusted_bds[date] > max_bd_previous_year:
+            adjusted_bds[date] = max_bd_previous_year
 
 # Convert the adjusted business days dictionary to a DataFrame
 adjusted_bd_df = pd.DataFrame(list(adjusted_bds.items()), columns=['dt2_report', 'adjusted_business_day'])
