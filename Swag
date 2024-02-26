@@ -1,1 +1,46 @@
 
+most_recent_year = input_df['dt2_report'].dt.year.max()
+recent_year_df = input_df[input_df['dt2_report'].dt.year == most_recent_year].copy()
+
+# Start with the first business day
+recent_year_df['adjusted_business_day'] = range(1, len(recent_year_df) + 1)
+
+# Adjust the business day for month ends to match the max business day of the same month last year
+for month in range(1, 13):
+    # Find the last business day of the month in the current year
+    last_day_of_month_idx = recent_year_df[recent_year_df['dt2_report'].dt.month == month].index[-1]
+    last_day_of_month_row = recent_year_df.loc[last_day_of_month_idx]
+    
+    # Get the max business day of the same month from the previous year
+    max_bd_previous_year = get_max_bd_previous_year(last_day_of_month_row, input_df)
+    
+    # Adjust the business days for the current month
+    if pd.notna(max_bd_previous_year):
+        month_days = recent_year_df[recent_year_df['dt2_report'].dt.month == month]
+        for idx, row in month_days.iterrows():
+            if row['business_day'] >= max_bd_previous_year:
+                recent_year_df.at[idx, 'adjusted_business_day'] = max_bd_previous_year
+            else:
+                recent_year_df.at[idx, 'adjusted_business_day'] = row['business_day']
+    
+    # Adjust the following month days if necessary
+    if month != 12:
+        next_month_days = recent_year_df[(recent_year_df['dt2_report'].dt.month == month + 1) &
+                                         (recent_year_df['dt2_report'].dt.year == most_recent_year)]
+    else:
+        next_month_days = recent_year_df[(recent_year_df['dt2_report'].dt.month == 1) &
+                                         (recent_year_df['dt2_report'].dt.year == most_recent_year + 1)]
+    
+    next_day_bd = max_bd_previous_year + 1 if next_month_days.empty else next_month_days['adjusted_business_day'].iloc[0] + 1
+    
+    for idx, _ in next_month_days.iterrows():
+        recent_year_df.at[idx, 'adjusted_business_day'] = next_day_bd
+        next_day_bd += 1
+
+# Merge the adjusted business days back to the input dataframe
+input_df = input_df.merge(recent_year_df[['dt2_report', 'adjusted_business_day']], 
+                          on='dt2_report', 
+                          how='left')
+
+# Print out the adjusted business days to verify the results
+print(input_df[input_df['dt2_report'].dt.year == most_recent_year].head(60))
