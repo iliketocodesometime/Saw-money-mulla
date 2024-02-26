@@ -1,3 +1,4 @@
+# Ensure the DataFrame is sorted by date
 input_df['dt2_report'] = pd.to_datetime(input_df['dt2_report'])
 input_df.sort_values('dt2_report', inplace=True)
 
@@ -5,37 +6,35 @@ input_df.sort_values('dt2_report', inplace=True)
 most_recent_year = input_df['dt2_report'].dt.year.max()
 
 # Filter data for the most recent year and the year before
-df_recent_year = input_df[input_df['dt2_report'].dt.year == most_recent_year]
+df_recent_year = input_df[input_df['dt2_report'].dt.year == most_recent_year].copy()
 df_previous_year = input_df[input_df['dt2_report'].dt.year == most_recent_year - 1]
 
 # Calculate the maximum business day for each month of the previous year
 max_business_days_previous_year = df_previous_year.groupby(df_previous_year['dt2_report'].dt.month)['business_day'].max()
 
-# Initialize a list to hold adjusted business days
-adjusted_business_days = []
-
-# Track the current adjusted business day
+# Initialize the current adjusted business day
 current_adjusted_bd = 0
 
-# Adjust business days for the most recent year
-for index, row in df_recent_year.iterrows():
-    current_date = row['dt2_report']
-    current_month = current_date.month
+# Extract unique dates for the most recent year
+unique_dates = df_recent_year['dt2_report'].unique()
+
+# Iterate through each unique date
+for date in unique_dates:
+    # Find the rows corresponding to the current date
+    rows = df_recent_year['dt2_report'] == date
     
     # Increment the business day
     current_adjusted_bd += 1
     
     # Check if it's the last day of the month in the dataset
-    if current_date == df_recent_year[df_recent_year['dt2_report'].dt.month == current_month]['dt2_report'].max():
+    if date == df_recent_year[rows]['dt2_report'].max():
+        current_month = pd.to_datetime(date).month
         # Adjust the business day to match the max business day of the same month from the previous year, if higher
         if current_month in max_business_days_previous_year and current_adjusted_bd < max_business_days_previous_year[current_month]:
             current_adjusted_bd = max_business_days_previous_year[current_month]
     
-    # Append the adjusted business day to the list
-    adjusted_business_days.append(current_adjusted_bd)
-
-# Add the "adjusted business day" column to the DataFrame for the most recent year
-df_recent_year['adjusted_business_day'] = adjusted_business_days
+    # Use .loc to update the 'adjusted_business_day' for rows corresponding to the current date
+    df_recent_year.loc[rows, 'adjusted_business_day'] = current_adjusted_bd
 
 # Merge the adjusted recent year DataFrame back into the original DataFrame
 input_df.update(df_recent_year)
