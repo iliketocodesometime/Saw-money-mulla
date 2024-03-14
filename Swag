@@ -1,1 +1,10 @@
-
+ Calculate distance to each FA
+            if not potential_FAs.empty:
+                potential_FAs['distance'] = potential_FAs.apply(lambda x: haversine(row['Longitude'], row['Latitude'], x['CityLon'], x['CityLat']), axis=1)
+                
+                # Filter based on distance_threshold
+                close_FAs = potential_FAs[potential_FAs['distance'] <= distance_threshold]
+                
+                if not close_FAs.empty:
+                    close_FAs = close_FAs.sort_values(by=["distance", "Date Posted"])
+                    chosen_FA = close_FAs.iloc[0]  # Choosing the closest FA if multiple are within the threshold
