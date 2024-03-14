@@ -1,17 +1,1 @@
 
-fa_full_info_df.apply(lambda x: haversine(row['Longitude'], row['Latitude'], x['CityLon'], x['CityLat']), axis=1)
-    closest_fa_to_lead = fa_full_info_df.loc[fa_full_info_df['distance_to_lead'].idxmin()]
-
-    # Calculate distances from the closest FA to other FAs
-    fa_full_info_df['distance_from_closest_fa'] = fa_full_info_df.apply(lambda x: haversine(closest_fa_to_lead['CityLon'], closest_fa_to_lead['CityLat'], x['CityLon'], x['CityLat']), axis=1)
-
-    # Filter FAs within the threshold distance from the closest FA
-    fas_within_threshold = fa_full_info_df[fa_full_info_df['distance_from_closest_fa'] <= distance_threshold_from_closest_fa]
-
-    # Ensure the closest FA is included in the list, even if no others are within the threshold
-    if fas_within_threshold.empty:
-        fas_within_threshold = closest_fa_to_lead
-
-    # Assign the lead to the FA who last got a lead from those within range
-    fas_within_threshold = fas_within_threshold.sort_values(by='Date Last Lead Received')  # Assuming 'Date Last Lead Received' tracks when each FA last received a lead
-    chosen_fa = fas_within_threshold.iloc[0]
