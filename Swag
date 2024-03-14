@@ -1,16 +1,1 @@
-# Updating the loop to handle cases where df2 might not contain the zip code (or other information) for a given ID
 
-for column in ['zip', 'city', 'state']:
-    # Find rows in df1 that are missing data for the current column
-    missing_data_indices = df1[df1[column].isnull()].index
-    
-    for index in missing_data_indices:
-        id_val = df1.loc[index, 'ID']
-        # Attempt to find the corresponding ID in df2 and check if the column value is available
-        df2_row = df2[df2['ID'] == id_val]
-        
-        if not df2_row.empty and not pd.isnull(df2_row[column].values[0]):
-            # Update df1 with information from df2
-            df1.loc[index, column] = df2_row[column].values[0]
-
-df1
