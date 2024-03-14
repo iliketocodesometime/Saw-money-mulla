@@ -1,1 +1,32 @@
+import pandas as pd
+import numpy as np
 
+# Example dataframes
+df1 = pd.DataFrame({
+    'ID': [1, 2, 3, 4],
+    'zip': [np.nan, '12345', np.nan, '78901'],
+    'city': ['New York', np.nan, 'Los Angeles', np.nan],
+    'state': ['NY', 'CA', np.nan, np.nan]
+})
+
+df2 = pd.DataFrame({
+    'ID': [1, 2, 3, 4],
+    'zip': ['10001', '23456', '90001', '89012'],
+    'city': ['New York City', 'San Francisco', 'Los Angeles', 'Las Vegas'],
+    'state': ['NY', 'CA', 'CA', 'NV']
+})
+
+# Looping through df1 and updating values from df2 where necessary
+for column in ['zip', 'city', 'state']:
+    # Find rows in df1 that are missing data for the current column
+    missing_data_indices = df1[df1[column].isnull()].index
+    
+    # For each row that is missing data, check if df2 has the data and update df1 accordingly
+    for index in missing_data_indices:
+        id_val = df1.loc[index, 'ID']
+        # Check if the corresponding ID in df2 has the information
+        if not df2[df2['ID'] == id_val][column].isnull().any():
+            # Update df1 with information from df2
+            df1.loc[index, column] = df2[df2['ID'] == id_val][column].values[0]
+
+df1
