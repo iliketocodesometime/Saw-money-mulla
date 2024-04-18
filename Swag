@@ -1,1 +1,64 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
+# Load the data from a CSV file
+file_path = 'your_data_file.csv'
+df = pd.read_csv(file_path)
+
+# Plotting the percentage of sectors led by SPD vs IRM
+sector_irm_spd = df.groupby(['IB Sector Final', 'IRM or SPD']).size().unstack(fill_value=0)
+sector_irm_spd_percentage = sector_irm_spd.div(sector_irm_spd.sum(axis=1), axis=0) * 100
+sector_irm_spd_percentage.plot(kind='bar', stacked=True, figsize=(14, 7), colormap='viridis')
+plt.title('Percentage of Sectors led by SPD vs. IRM')
+plt.ylabel('Percentage')
+plt.xlabel('IB Sector Final')
+plt.legend(title='IRM or SPD')
+plt.show()
+
+# Potential wealth distribution across sectors
+plt.figure(figsize=(12, 8))
+sns.boxplot(x='IB Sector Final', y='Potential Wealth', hue='IRM or SPD', data=df)
+plt.title('Potential Wealth Distribution by Sector and IRM/SPD')
+plt.xlabel('IB Sector Final')
+plt.ylabel('Potential Wealth')
+plt.legend(title='IRM or SPD')
+plt.show()
+
+# Average potential wealth comparison between SPD and IRM leads
+average_wealth = df.groupby('IRM or SPD')['Potential Wealth'].mean()
+print("Average Potential Wealth by IRM/SPD:")
+print(average_wealth)
+
+# Product penetration analysis
+df['Number of Products'] = df['MSAW Client Relationship - Overall'].apply(lambda x: len(x.split(',')))
+avg_products = df.groupby('IRM or SPD')['Number of Products'].mean()
+more_than_one_product = df[df['Number of Products'] > 1].groupby('IRM or SPD').size()
+
+print("Average Number of Products per Client by IRM/SPD:")
+print(avg_products)
+print("Number of Clients with More Than One Product by IRM/SPD:")
+print(more_than_one_product)
+
+# Market share at the sector level
+sector_wealth = df.groupby(['IB Sector Final', 'IRM or SPD'])['Potential Wealth'].sum().unstack()
+sector_wealth.plot(kind='bar', figsize=(14, 7), colormap='coolwarm')
+plt.title('Market Share by Sector and IRM/SPD')
+plt.ylabel('Total Potential Wealth')
+plt.xlabel('IB Sector Final')
+plt.show()
+
+# Client Satisfaction Status (RAG Status) per sector
+plt.figure(figsize=(12, 8))
+sns.countplot(y='IB Sector Final', hue='Client Satisfaction Status (Account)', data=df)
+plt.title('Client Satisfaction Status by Sector')
+plt.xlabel('Count')
+plt.ylabel('IB Sector Final')
+plt.legend(title='Client Satisfaction Status')
+plt.show()
+
+# Summary of findings (dummy text, replace with actual findings later)
+print("Summary of Findings:")
+print("- Key findings from the analysis")
+print("- Actionable recommendations based on the data")
