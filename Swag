@@ -1,1 +1,24 @@
+# Calculate the percentage ownership of each SPD team within each sector
+sector_spd_breakdown = data.groupby(['IB Sector Final', 'SPD Team']).size().unstack().fillna(0)
+sector_spd_percentage = sector_spd_breakdown.div(sector_spd_breakdown.sum(axis=1), axis=0) * 100
 
+# Sort by the highest percentage ownership
+sorted_sectors = sector_spd_percentage.max(axis=1).sort_values(ascending=False).index
+sector_spd_percentage = sector_spd_percentage.loc[sorted_sectors]
+
+# Plot the stacked bar chart
+fig, ax = plt.subplots(figsize=(14, 7))
+sector_spd_percentage.plot(kind='bar', stacked=True, ax=ax, colormap='viridis')
+
+# Add percentage labels
+for c in ax.containers:
+    labels = [f'{v:.1f}%' if v > 0 else '' for v in c.datavalues]
+    ax.bar_label(c, labels=labels, label_type='center')
+
+plt.title('Sector Breakdown by SPD Team')
+plt.xlabel('Sector')
+plt.ylabel('Percentage Ownership')
+plt.legend(title='SPD Team')
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.show()
