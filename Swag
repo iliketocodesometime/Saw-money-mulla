@@ -4,12 +4,12 @@ def format_jpn(jpn):
 
 # Function to remove trailing zeros from JPNs in df2
 def remove_trailing_zeros(jpn):
-    return jpn.rstrip('0')
+    return str(jpn).rstrip('0')
 
 # Create a new column in df with formatted JPNs
 df['Formatted JPN'] = df['Gallagher JPN List'].apply(format_jpn)
 
-# Remove trailing zeros in df2 columns
+# Convert to strings and remove trailing zeros in df2 columns
 df2['jpn'] = df2['jpn'].apply(remove_trailing_zeros)
 df2['jpn_prim'] = df2['jpn_prim'].apply(remove_trailing_zeros)
 df2['jpn_sec'] = df2['jpn_sec'].apply(remove_trailing_zeros)
