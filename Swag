@@ -1,1 +1,104 @@
+# Function to format JPN from df to match df2 format
+def format_jpn(jpn):
+    return jpn.replace('-', '0')
 
+# Create a new column in df with formatted JPNs
+df['Formatted JPN'] = df['Gallagher JPN List'].apply(format_jpn)
+
+# Initialize lists to store results
+found_jpns = []
+not_found_jpns = []
+
+# Check each JPN in df against df2
+for jpn in df['Formatted JPN']:
+    if ((df2['jpn'] == jpn).any() or (df2['jpn_prim'] == jpn).any() or (df2['jpn_sec'] == jpn).any()):
+        found_jpns.append(jpn)
+    else:
+        not_found_jpns.append(jpn)
+
+# Create resulting data frames
+df_found = df[df['Formatted JPN'].isin(found_jpns)].copy()
+df_not_found = df[df['Formatted JPN'].isin(not_found_jpns)].copy()
+
+# Drop the formatted column if you don't need it in the final output
+df_found.drop(columns=['Formatted JPN'], inplace=True)
+df_not_found.drop(columns=['Formatted JPN'], inplace=True)
+
+# Display the resulting data frames
+print("JPNs found in df2:")
+print(df_found)
+
+print("\nJPNs not found in df2:")
+print(df_not_found)
+This script will output two data frames: df_found with JPNs found in any column of df2 and df_not_found with JPNs not found in any column of df2.
+
+If you have actual data to test, you can replace the sample data with your data frames.
+
+this is returning none found even though I can see that there are matches between the two. Can we make sure we remove any trailing zeros from df2 and make both the column data types the same to ensure matching?
+ChatGPT
+Sure, let's enhance the script to handle trailing zeros and ensure both columns have the same data type. We'll also add a step to strip any trailing zeros from the columns in df2.
+
+Here's the updated script:
+
+python
+Copy code
+import pandas as pd
+
+# Sample data
+df = pd.DataFrame({
+    'Gallagher JPN List': ['455-555', '123-456', '789-012']
+})
+
+df2 = pd.DataFrame({
+    'jpn': ['4550555', '7890120', '1230456'],
+    'jpn_prim': ['0000000', '1234567', '8901234'],
+    'jpn_sec': ['0000000', '0000000', '7890123']
+})
+
+# Function to format JPN from df to match df2 format
+def format_jpn(jpn):
+    return jpn.replace('-', '0')
+
+# Function to remove trailing zeros from JPNs in df2
+def remove_trailing_zeros(jpn):
+    return jpn.rstrip('0')
+
+# Create a new column in df with formatted JPNs
+df['Formatted JPN'] = df['Gallagher JPN List'].apply(format_jpn)
+
+# Remove trailing zeros in df2 columns
+df2['jpn'] = df2['jpn'].apply(remove_trailing_zeros)
+df2['jpn_prim'] = df2['jpn_prim'].apply(remove_trailing_zeros)
+df2['jpn_sec'] = df2['jpn_sec'].apply(remove_trailing_zeros)
+
+# Ensure both are strings
+df['Formatted JPN'] = df['Formatted JPN'].astype(str)
+df2['jpn'] = df2['jpn'].astype(str)
+df2['jpn_prim'] = df2['jpn_prim'].astype(str)
+df2['jpn_sec'] = df2['jpn_sec'].astype(str)
+
+# Initialize lists to store results
+found_jpns = []
+not_found_jpns = []
+
+# Check each JPN in df against df2
+for jpn in df['Formatted JPN']:
+    if ((df2['jpn'] == jpn).any() or (df2['jpn_prim'] == jpn).any() or (df2['jpn_sec'] == jpn).any()):
+        found_jpns.append(jpn)
+    else:
+        not_found_jpns.append(jpn)
+
+# Create resulting data frames
+df_found = df[df['Formatted JPN'].isin(found_jpns)].copy()
+df_not_found = df[df['Formatted JPN'].isin(not_found_jpns)].copy()
+
+# Drop the formatted column if you don't need it in the final output
+df_found.drop(columns=['Formatted JPN'], inplace=True)
+df_not_found.drop(columns=['Formatted JPN'], inplace=True)
+
+# Display the resulting data frames
+print("JPNs found in df2:")
+print(df_found)
+
+print("\nJPNs not found in df2:")
+print(df_not_found)
