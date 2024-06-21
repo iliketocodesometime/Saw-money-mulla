@@ -1,8 +1,38 @@
-def get_duplicates(df, column):
-    duplicates = df[df.duplicated(subset=column, keep=False)]
-    return duplicates
+def process_duplicates(df):
+    numerical_cols = df.select_dtypes(include='number').columns.tolist()
+    numerical_cols.remove('BBB_Number')
+    
+    # Calculate average numerical value for each row
+    df['avg_value'] = df[numerical_cols].mean(axis=1)
+    
+    # Get the rows without duplicates
+    no_duplicates = df[~df.duplicated('BBB_Number', keep=False)]
+    
+    # Get the rows with duplicates
+    duplicates = df[df.duplicated('BBB_Number', keep=False)]
+    
+    # Group by BBB_Number and process each group
+    result = []
+    for _, group in duplicates.groupby('BBB_Number'):
+        # Sort by average value and get the row with the highest average
+        main_row = group.loc[group['avg_value'].idxmax()].copy()
+        
+        # Sum the numerical values of the other rows to the main row
+        for col in numerical_cols:
+            main_row[col] = group[col].sum()
+        
+        result.append(main_row)
+    
+    # Combine the result with no duplicates
+    final_df = pd.concat([no_duplicates, pd.DataFrame(result)], ignore_index=True)
+    
+    # Drop the average value column
+    final_df.drop(columns=['avg_value'], inplace=True)
+    
+    return final_df
 
-# Get duplicates for columns A, B, and C
-duplicates_A = get_duplicates(df, 'A')
-duplicates_B = get_duplicates(df, 'B')
-duplicates_C = get_duplicates(df, 'C')
+# Process the dataframe
+final_df = process_duplicates(df)
+
+# Output the resulting dataframe
+print(final_df)
