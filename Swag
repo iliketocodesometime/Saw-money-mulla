@@ -1,1 +1,8 @@
+def get_duplicates(df, column):
+    duplicates = df[df.duplicated(subset=column, keep=False)]
+    return duplicates
 
+# Get duplicates for columns A, B, and C
+duplicates_A = get_duplicates(df, 'A')
+duplicates_B = get_duplicates(df, 'B')
+duplicates_C = get_duplicates(df, 'C')
