@@ -1,15 +1,21 @@
 def process_duplicates(df):
     numerical_cols = df.select_dtypes(include='number').columns.tolist()
-    numerical_cols.remove('BBB_Number')
+    
+    if 'BBB_Number' in numerical_cols:
+        numerical_cols.remove('BBB_Number')
     
     # Calculate average numerical value for each row
     df['avg_value'] = df[numerical_cols].mean(axis=1)
     
+    # Separate rows with and without BBB_Number
+    without_bbb = df[df['BBB_Number'].isna()]
+    with_bbb = df[df['BBB_Number'].notna()]
+    
     # Get the rows without duplicates
-    no_duplicates = df[~df.duplicated('BBB_Number', keep=False)]
+    no_duplicates = with_bbb[~with_bbb.duplicated('BBB_Number', keep=False)]
     
     # Get the rows with duplicates
-    duplicates = df[df.duplicated('BBB_Number', keep=False)]
+    duplicates = with_bbb[with_bbb.duplicated('BBB_Number', keep=False)]
     
     # Group by BBB_Number and process each group
     result = []
@@ -23,8 +29,8 @@ def process_duplicates(df):
         
         result.append(main_row)
     
-    # Combine the result with no duplicates
-    final_df = pd.concat([no_duplicates, pd.DataFrame(result)], ignore_index=True)
+    # Combine the results with no duplicates and without BBB_Number
+    final_df = pd.concat([no_duplicates, pd.DataFrame(result), without_bbb], ignore_index=True)
     
     # Drop the average value column
     final_df.drop(columns=['avg_value'], inplace=True)
