@@ -1,19 +1,1 @@
-# Split the DataFrame into two DataFrames
-df_ics = df[df['Datasource'] == 'ICS']
-df_sf = df[df['Datasource'] == 'SF']
 
-# Create a key for matching records based on specified columns
-df_ics['key'] = df_ics[['BBB Number', 'Stage', 'Opportunity Type']].astype(str).agg('-'.join, axis=1)
-df_sf['key'] = df_sf[['BBB Number', 'Stage', 'Opportunity Type']].astype(str).agg('-'.join, axis=1)
-
-# Find duplicates in the 'ICS' DataFrame that exist in the 'SF' DataFrame
-duplicates = df_ics[df_ics['key'].isin(df_sf['key'])]
-
-# Remove duplicates from the 'ICS' DataFrame
-df_ics_deduplicated = df_ics[~df_ics.index.isin(duplicates.index)]
-
-# Combine the deduplicated 'ICS' DataFrame with the original DataFrame excluding the original 'ICS' records
-df_deduplicated = pd.concat([df[df['Datasource'] != 'ICS'], df_ics_deduplicated])
-
-# Drop the temporary key column
-df_deduplicated.drop(columns=['key'], inplace=True)
