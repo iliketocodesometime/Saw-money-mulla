@@ -1,25 +1,20 @@
-import pandas as pd
-
-def join_on_multiple_columns(df1, df2, cols1, cols2):
-    result = pd.DataFrame(columns=df1.columns.union(df2.columns))
+def left_join_multiple_columns(df1, df2, cols1, cols2):
+    # Create a column to mark the index for merging purposes
+    df1['index'] = df1.index
     
-    for index, row in df1.iterrows():
-        match = df2[(df2[cols2[0]] == row[cols1[0]]) |
-                    (df2[cols2[1]] == row[cols1[1]]) |
-                    (df2[cols2[2]] == row[cols1[2]]) |
-                    (df2[cols2[3]] == row[cols1[3]])]
-        
-        if not match.empty:
-            match = match.iloc[0]  # Get the first matching row
-            combined_row = pd.concat([row, match])
-            result = result.append(combined_row, ignore_index=True)
+    # Perform a left join for each pair of columns and concatenate the results
+    merged_dfs = []
+    for col1, col2 in zip(cols1, cols2):
+        merged_df = pd.merge(df1, df2, left_on=col1, right_on=col2, how='left', suffixes=('', f'_{col2}'))
+        merged_dfs.append(merged_df)
     
-    return result
-
-# Example usage:
-# df1 = pd.DataFrame({...})
-# df2 = pd.DataFrame({...})
-# cols1 = ['column1', 'column2', 'column3', 'column4']
-# cols2 = ['column5', 'column6', 'column7', 'column8']
-# result_df = join_on_multiple_columns(df1, df2, cols1, cols2)
-
+    # Concatenate all merged dataframes
+    merged_df = pd.concat(merged_dfs, ignore_index=True)
+    
+    # Drop duplicates based on the original index and keep the first match
+    merged_df = merged_df.drop_duplicates(subset='index', keep='first')
+    
+    # Drop the temporary index column
+    merged_df = merged_df.drop(columns=['index'])
+    
+    return merged_df
