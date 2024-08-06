@@ -1,12 +1,11 @@
-def join_dfs_on_columns(df1, df2, cols1, cols2):
-    matched_df = pd.DataFrame()
-    df2_copy = df2.copy()
+def join_dataframes(df1, df2, cols_df1, cols_df2):
+    # Renaming columns in df2 to match df1
+    df2_renamed = df2.rename(columns=dict(zip(cols_df2, cols_df1)))
     
-    for _, row1 in df1.iterrows():
-        for _, row2 in df2_copy.iterrows():
-            if all(row1[col1] == row2[col2] for col1, col2 in zip(cols1, cols2)):
-                matched_df = matched_df.append({**row1, **row2}, ignore_index=True)
-                df2_copy = df2_copy.drop(row2.name)
-                break
-
-    return matched_df
+    # Merging dataframes on the specified columns
+    result = pd.merge(df1, df2_renamed, on=cols_df1, how='left')
+    
+    # Dropping duplicates based on the keys from df1
+    result = result.drop_duplicates(subset=cols_df1)
+    
+    return result
