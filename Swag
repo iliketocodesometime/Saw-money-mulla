@@ -1,11 +1,8 @@
 def join_dataframes(df1, df2, cols_df1, cols_df2):
-    # Renaming columns in df2 to match df1
-    df2_renamed = df2.rename(columns=dict(zip(cols_df2, cols_df1)))
+    # Merge the two DataFrames on the specified columns
+    merged_df = pd.merge(df1, df2, left_on=cols_df1, right_on=cols_df2, how='left')
     
-    # Merging dataframes on the specified columns
-    result = pd.merge(df1, df2_renamed, on=cols_df1, how='left')
+    # Drop duplicates based on the df1 index to keep only the first match
+    merged_df = merged_df.drop_duplicates(subset=cols_df1)
     
-    # Dropping duplicates based on the keys from df1
-    result = result.drop_duplicates(subset=cols_df1)
-    
-    return result
+    return merged_df
