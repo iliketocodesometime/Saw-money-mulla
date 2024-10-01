@@ -7,16 +7,30 @@ folder = dataiku.Folder("your_folder_id")
 # List files in the folder
 file_list = folder.list_paths_in_partition()
 
-# Filter files with the consistent prefix
-prefix = "your_consistent_prefix"
-matching_files = [f for f in file_list if f.startswith(prefix) and f.endswith('.xlsx')]
+# Specify the list of prefixes you're looking for
+prefixes = ["prefix1", "prefix2", "prefix3"]  # Add as many prefixes as needed
 
-# Sort by the most recent file (if multiple)
-latest_file = sorted(matching_files)[-1]
+# Initialize a dictionary to store DataFrames for each prefix
+dfs = {}
 
-# Read the Excel file into a pandas DataFrame
-with folder.get_download_stream(latest_file) as stream:
-    df = pd.read_excel(stream)
+# Iterate through each prefix
+for prefix in prefixes:
+    # Find files that start with the current prefix and end with '.xlsx'
+    matching_files = [f for f in file_list if f.startswith(prefix) and f.endswith('.xlsx')]
+    
+    # Sort and get the most recent file for the current prefix
+    if matching_files:
+        latest_file = sorted(matching_files)[-1]
+        
+        # Load the latest file into a DataFrame
+        with folder.get_download_stream(latest_file) as stream:
+            df = pd.read_excel(stream)
+        
+        # Store the DataFrame in the dictionary using the prefix as the key
+        dfs[prefix] = df
+    else:
+        print(f"No files found for prefix: {prefix}")
 
-# Display the dataframe (optional)
-df.head()
+# Access the DataFrames using dfs['prefix1'], dfs['prefix2'], etc.
+# Example: displaying the first few rows of the DataFrame for 'prefix1'
+dfs['prefix1'].head()
