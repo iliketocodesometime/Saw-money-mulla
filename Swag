@@ -1,1 +1,20 @@
-df = pd.read_csv(io.StringIO(folder.get_download_stream(sorted([f for f in file_list if f.startswith('nasdaq') and f.endswith('.csv')])[-1]).read().decode('utf-8'))) if [f for f in file_list if f.startswith('nasdaq') and f.endswith('.csv')] else None
+import requests
+import pandas as pd
+from io import StringIO
+
+# Define the URL for the NASDAQ stock screener CSV download
+url = "https://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download"
+
+# Send a request to get the CSV content
+response = requests.get(url)
+
+# Check if the request was successful
+if response.status_code == 200:
+    # Load the content into a DataFrame
+    csv_content = StringIO(response.text)
+    df = pd.read_csv(csv_content)
+
+    # Display the first few rows of the data
+    df.head()
+else:
+    print("Failed to download CSV. Status code:", response.status_code)
