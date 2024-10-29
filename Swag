@@ -1,36 +1,68 @@
-import dataiku
-import pandas as pd
+# Initialize the result dataframe
+result_df = pd.DataFrame(columns=["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"])
 
-# Define the folder to access
-folder = dataiku.Folder("your_folder_id")
+# Cross Sell Closed Won
+merged_df = dfCross_Sell_Closed_Won.merge(df_client_list, left_on="BBB Number", right_on="BBB Number Master", how="inner")
+merged_df["Opportunity Category"] = "Cross Sell"
+merged_df["Opportunity Type"] = merged_df["Business"]
+merged_df["Account Name"] = merged_df["Account Name_x"]
+merged_df["Closed Date"] = merged_df["Close Date"]
+merged_df["Stage"] = "Closed"
 
-# List files in the folder
-file_list = folder.list_paths_in_partition()
+result_df = pd.concat([result_df, merged_df[["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"]]])
 
-# Specify the list of prefixes you're looking for
-prefixes = ["prefix1", "prefix2", "prefix3"]  # Add as many prefixes as needed
+# Cross Sell Pipeline
+merged_df = dfCross_Sell_Pipeline.merge(df_client_list, left_on="BBB Number", right_on="BBB Number Master", how="inner")
+merged_df["Opportunity Category"] = "Cross Sell"
+merged_df["Opportunity Type"] = merged_df["Business"]
+merged_df["Account Name"] = merged_df["Account Name_x"]
+merged_df["Closed Date"] = merged_df["Close Date"]
+merged_df["Stage"] = merged_df["Stage_x"]
 
-# Initialize a dictionary to store DataFrames for each prefix
-dfs = {}
+result_df = pd.concat([result_df, merged_df[["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"]]])
 
-# Iterate through each prefix
-for prefix in prefixes:
-    # Find files that start with the current prefix and end with '.xlsx'
-    matching_files = [f for f in file_list if f.startswith(prefix) and f.endswith('.xlsx')]
-    
-    # Sort and get the most recent file for the current prefix
-    if matching_files:
-        latest_file = sorted(matching_files)[-1]
-        
-        # Load the latest file into a DataFrame
-        with folder.get_download_stream(latest_file) as stream:
-            df = pd.read_excel(stream)
-        
-        # Store the DataFrame in the dictionary using the prefix as the key
-        dfs[prefix] = df
-    else:
-        print(f"No files found for prefix: {prefix}")
+# GAS Upsell Pipeline
+merged_df = dfGAS_Pipeline.merge(df_client_list, left_on="BBB Number", right_on="BBB Number Master", how="inner")
+merged_df["Opportunity Category"] = "Upsell"
+merged_df["Opportunity Type"] = merged_df["Business"]
+merged_df["Account Name"] = merged_df["Account Name_x"]
+merged_df["Closed Date"] = merged_df["Close Date"]
+merged_df["Stage"] = merged_df["Opportunity: Stage"]
 
-# Access the DataFrames using dfs['prefix1'], dfs['prefix2'], etc.
-# Example: displaying the first few rows of the DataFrame for 'prefix1'
-dfs['prefix1'].head()
+result_df = pd.concat([result_df, merged_df[["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"]]])
+
+# GAS Closed Won
+merged_df = dfGAS_Closed_Won.merge(df_client_list, left_on="BBB Number", right_on="BBB Number Master", how="inner")
+merged_df["Opportunity Category"] = "Upsell"
+merged_df["Opportunity Type"] = merged_df["Business"]
+merged_df["Account Name"] = merged_df["Account Name_x"]
+merged_df["Closed Date"] = merged_df["Close Date"]
+merged_df["Stage"] = merged_df["Opportunity: Stage"]
+
+result_df = pd.concat([result_df, merged_df[["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"]]])
+
+# Education Deepening
+merged_df = dfEducation.merge(df_client_list, left_on="BBB Number", right_on="BBB Number Master", how="inner")
+merged_df["Opportunity Category"] = "Deepening"
+merged_df["Opportunity Type"] = "Education"
+merged_df["Account Name"] = merged_df["Account Name_x"]
+merged_df["Closed Date"] = merged_df["Date"]
+merged_df["Stage"] = "Closed Won"
+
+result_df = pd.concat([result_df, merged_df[["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"]]])
+
+# EAA Deepening
+merged_df = dfEAA.merge(df_client_list, left_on="BBB Number", right_on="BBB Number Master", how="inner")
+merged_df["Opportunity Category"] = "Deepening"
+merged_df["Opportunity Type"] = "EAA"
+merged_df["Account Name"] = merged_df["Account Name_x"]
+merged_df["Closed Date"] = merged_df["EAA Onboarding Date"]
+merged_df["Stage"] = merged_df["EAA Status"]
+
+result_df = pd.concat([result_df, merged_df[["Opportunity Category", "Opportunity Type", "Account Name", "Closed Date", "Director", "Director Role", "Stage"]]])
+
+# Reset index for result_df
+result_df.reset_index(drop=True, inplace=True)
+
+# Final result_df is ready
+print(result_df.head())
