@@ -1,85 +1,83 @@
 Sub GenerateDirectorPresentations()
-    Dim ws As Worksheet
-    Dim pptApp As Object
-    Dim pptPres As Object
-    Dim pptSlide As Object
-    Dim tcChart As Object
-    Dim lastRow As Long
-    Dim directorDict As Object
-    Dim stageCount As Object
-    Dim director As Variant
-    Dim stages As Variant
-    Dim slidePath As String
-    Dim outputPath As String
-    
-    ' Set references to the Excel sheet and initialize variables
-    Set ws = ThisWorkbook.Sheets("New Plan Pipeline")
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    Set directorDict = CreateObject("Scripting.Dictionary")
-    Set stageCount = CreateObject("Scripting.Dictionary")
-    
-    ' Gather all directors and stages in the dataset
-    For i = 2 To lastRow
-        director = ws.Cells(i, "B").Value ' Column "Director"
-        stage = ws.Cells(i, "E").Value    ' Column "Stage"
-        
-        ' Add director to dictionary
-        If Not directorDict.exists(director) Then
-            directorDict.Add director, CreateObject("Scripting.Dictionary")
-        End If
-        
-        ' Add stage to the director's dictionary and count occurrences
-        If Not directorDict(director).exists(stage) Then
-            directorDict(director).Add stage, 0
-        End If
-        directorDict(director)(stage) = directorDict(director)(stage) + 1
-    Next i
-    
-    ' Create PowerPoint instance
-    Set pptApp = CreateObject("PowerPoint.Application")
-    pptApp.Visible = True
-    
-    ' Set the template path (update this path accordingly)
-    slidePath = "C:\Path\To\Template.pptx"
-    outputPath = "C:\Path\To\Output\"
 
-    ' Loop through each director to create presentations
-    For Each director In directorDict.Keys
-        Set pptPres = pptApp.Presentations.Open(slidePath)
-        Set pptSlide = pptPres.Slides(2) ' Access Slide 2
+    Dim ws As Worksheet
+    Dim PPTApp As PowerPoint.Application
+    Dim PPTPres As PowerPoint.Presentation
+    Dim PPTSlide As PowerPoint.Slide
+    Dim DirectorRange As Range, DirectorCell As Range
+    Dim DataRange As Range
+    Dim LastRow As Long
+    Dim Director As String
+    
+    '--- Set worksheet and find last row ---
+    Set ws = ThisWorkbook.Worksheets("New Plan Pipeline")
+    LastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    '--- Define the DirectorRange (unique directors) ---
+    ws.Range("B1:B" & LastRow).AdvancedFilter Action:=xlFilterCopy, _
+        CopyToRange:=ws.Range("Z1"), Unique:=True
+    Set DirectorRange = ws.Range("Z2:Z" & ws.Range("Z" & ws.Rows.Count).End(xlUp).Row)
+    
+    '--- Loop through each Director ---
+    For Each DirectorCell In DirectorRange
+        Director = DirectorCell.Value
         
-        ' Prepare data for Think-Cell chart
-        stages = directorDict(director).keys
-        Dim chartData() As Variant
-        ReDim chartData(1 To UBound(stages) + 1, 1 To 2)
+        '--- Open template presentation ---
+        Set PPTApp = New PowerPoint.Application
+        PPTApp.Visible = True
+        Set PPTPres = PPTApp.Presentations.Open("C:\Path\To\Template.pptx")
+        Set PPTSlide = PPTPres.Slides(2) ' Slide with thinkcell chart
         
-        ' Populate chart data with stage names and counts
-        Dim j As Long
-        For j = 1 To UBound(stages) + 1
-            chartData(j, 1) = stages(j - 1) ' Stage name
-            chartData(j, 2) = directorDict(director)(stages(j - 1)) ' Count
-        Next j
+        '--- Build data range for this Director ---
+        '   Example: we count each row that has this Director
+        '   For Thinkcell, we typically provide a small table with category + values
+        '   Here we’ll set categories as distinct stages and counts as total occurrences.
         
-        ' Update Think-Cell chart
-        For Each tcChart In pptSlide.Shapes
-            If tcChart.Type = msoLinkedOLEObject Then
-                If InStr(tcChart.OLEFormat.progID, "ThinkCell.Chart") > 0 Then
-                    tcChart.OLEFormat.Object.SetData chartData
-                    Exit For
+        Dim StageDict As Object, c As Range
+        Set StageDict = CreateObject("Scripting.Dictionary")
+        
+        For Each c In ws.Range("B2:B" & LastRow)
+            If c.Value = Director Then
+                ' The Stage is in column E, for example
+                If Not StageDict.Exists(ws.Cells(c.Row, "E").Value) Then
+                    StageDict.Add ws.Cells(c.Row, "E").Value, 1
+                Else
+                    StageDict(ws.Cells(c.Row, "E").Value) = StageDict(ws.Cells(c.Row, "E").Value) + 1
                 End If
             End If
-        Next tcChart
+        Next c
         
-        ' Save the presentation with the director's name
-        pptPres.SaveAs outputPath & director & "_Presentation.pptx"
-        pptPres.Close
-    Next director
+        '--- Write small table for thinkcell link ---
+        '   Let's place it on a hidden sheet or range
+        With ws
+            .Range("AA1").Value = "Stage"
+            .Range("AB1").Value = "Count"
+            Dim i As Long: i = 2
+            
+            Dim key As Variant
+            For Each key In StageDict.Keys
+                .Range("AA" & i).Value = key
+                .Range("AB" & i).Value = StageDict(key)
+                i = i + 1
+            Next key
+        End With
+
+        '--- Update thinkcell chart link ---
+        '   Assume the chart is set to read from "AA1:AB?":
+        PPTSlide.Select
+        PPTSlide.Shapes("Chart1").LinkFormat.Update ' if your link is properly set
+        
+        '--- Save new PPT ---
+        PPTPres.SaveAs "C:\Path\To\Output\" & Director & " New Plan Sales.pptx"
+        PPTPres.Close
+        PPTApp.Quit
+        
+        '--- Clear out stage table for next iteration ---
+        ws.Range("AA:AB").Clear
+    Next DirectorCell
     
-    ' Cleanup
-    pptApp.Quit
-    Set pptApp = Nothing
-    Set directorDict = Nothing
-    Set stageCount = Nothing
-    
-    MsgBox "Presentations created successfully!", vbInformation
+    '--- Cleanup ---
+    ws.Range("Z:Z").ClearContents
+    MsgBox "Presentations generated successfully."
+
 End Sub
