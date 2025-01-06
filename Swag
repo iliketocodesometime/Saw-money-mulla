@@ -5,16 +5,17 @@ Sub UpdateChartsForDirectors()
     Dim wb As Workbook: Set wb = ThisWorkbook
     Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")  ' <-- Adjust if needed
     
-    ' Identify last row in column A
+    ' Identify last row of data in column A
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
     
-    ' Range for all data except header row (A2:E...)
+    ' Range excluding header row (A2:E...)
     Dim rngDataBody As Range
     Set rngDataBody = ws.Range("A2:E" & lastRow)
     
-    ' Build a dictionary of unique Directors from column B
+    ' Dictionary of unique Directors (column B => 2)
     Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
+    
     Dim cell As Range
     For Each cell In ws.Range("B2:B" & lastRow)
         If Not IsEmpty(cell.Value) Then
@@ -22,7 +23,7 @@ Sub UpdateChartsForDirectors()
         End If
     Next cell
     
-    ' Get Think-Cell Add-In
+    ' Get the Think-Cell add-in
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     
@@ -30,29 +31,30 @@ Sub UpdateChartsForDirectors()
     Dim ppApp As Object
     Set ppApp = CreateObject("PowerPoint.Application")
     
-    ' Template path, save folder, Think-Cell chart name
-    Const templatePath      As String = "C:\Samples\UpdateChart\template.pptx"
-    Const saveFolder        As String = "C:\Samples\UpdateChart\"
+    ' Paths, chart name
+    Const templatePath       As String = "C:\Samples\UpdateChart\template.pptx"
+    Const saveFolder         As String = "C:\Samples\UpdateChart\"
     Const thinkCellChartName As String = "Chart1"
     
-    Dim dirName As Variant, rngFilter As Range
+    Dim dirName As Variant
+    Dim rngFilter As Range
     Dim pres As Object  ' Late binding for PowerPoint.Presentation
     
-    ' Loop through each Director
+    ' Loop over each Director
     For Each dirName In dictDir.Keys
         
-        ' Remove any existing AutoFilter; apply new filter on column B => Field:=2
+        ' Clear any existing filters, then filter column B (Field:=2) by Director
         ws.AutoFilterMode = False
         rngDataBody.AutoFilter Field:=2, Criteria1:=dirName
         
-        ' Collect visible rows
+        ' Grab visible cells
         On Error Resume Next
         Set rngFilter = rngDataBody.SpecialCells(xlCellTypeVisible)
         On Error GoTo 0
         
         If Not rngFilter Is Nothing Then
             
-            ' Remove old TempChartData sheet if it exists
+            ' Remove old TempChartData (if exists)
             On Error Resume Next
             Application.DisplayAlerts = False
             If Not wb.Worksheets("TempChartData") Is Nothing Then
@@ -61,12 +63,12 @@ Sub UpdateChartsForDirectors()
             Application.DisplayAlerts = True
             On Error GoTo 0
             
-            ' Create a fresh TempChartData sheet
+            ' Create fresh TempChartData sheet
             Dim wsTemp As Worksheet
             Set wsTemp = wb.Worksheets.Add
             wsTemp.Name = "TempChartData"
             
-            ' Dictionary to count deals by Stage (column E => 5th column)
+            ' Dictionary to count deals by Stage (Stage in col E => 5)
             Dim dictStage As Object
             Set dictStage = CreateObject("Scripting.Dictionary")
             
@@ -82,28 +84,30 @@ Sub UpdateChartsForDirectors()
                 End If
             Next r
             
-            ' If we have any stages for this Director...
+            ' If we have Stages for this Director...
             If dictStage.Count > 0 Then
                 
-                ' We want Stage names in row 1, starting at column B (col index = 2)
-                ' And counts in row 3, also starting at column B
-                Dim i As Long: i = 2   ' Start writing at column B
+                ' We'll place them in Row 1 (Stage names) and Row 3 (counts),
+                ' starting from Column B (that is column index 2).
+                
+                Dim colPtr As Long
+                colPtr = 2  ' 2 => Column B
+                
                 Dim key As Variant
                 For Each key In dictStage.Keys
-                    ' Stage name in row 1
-                    wsTemp.Cells(1, i).Value = key
-                    ' Stage count in row 3
-                    wsTemp.Cells(3, i).Value = dictStage(key)
-                    i = i + 1
+                    ' Row 1 => Stage name
+                    wsTemp.Cells(1, colPtr).Value = key
+                    ' Row 3 => Stage count
+                    wsTemp.Cells(3, colPtr).Value = dictStage(key)
+                    
+                    colPtr = colPtr + 1
                 Next key
                 
-                ' Build final chart range from row 1 to row 3, columns B..(i-1)
+                ' Define the range from B1 to the last column in row 3
                 Dim rngChart As Range
-                Set rngChart = wsTemp.Range( _
-                                wsTemp.Cells(1, 2), _
-                                wsTemp.Cells(3, i - 1))
+                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), wsTemp.Cells(3, colPtr - 1))
                 
-                ' Open the template read-only and untitled so the original isn't changed
+                ' Open template read-only & untitled => original not overwritten
                 Set pres = ppApp.Presentations.Open( _
                     FileName:=templatePath, _
                     ReadOnly:=msoTrue, _
@@ -112,13 +116,13 @@ Sub UpdateChartsForDirectors()
                 ' Update the Think-Cell chart
                 tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
                 
-                ' Save & close as a new file
+                ' Save & close
                 pres.SaveAs saveFolder & dirName & "_updated.pptx"
                 pres.Close
             End If
         End If
         
-        ' Turn off filter before next iteration
+        ' Clear filter for next iteration
         ws.AutoFilterMode = False
         Set rngFilter = Nothing
     Next dirName
