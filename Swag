@@ -6,8 +6,9 @@ Sub GenerateDirectorPresentations()
     Dim tcChart As Object
     Dim lastRow As Long
     Dim directorDict As Object
+    Dim stageCount As Object
     Dim director As Variant
-    Dim directorCount As Object
+    Dim stages As Variant
     Dim slidePath As String
     Dim outputPath As String
     
@@ -15,18 +16,23 @@ Sub GenerateDirectorPresentations()
     Set ws = ThisWorkbook.Sheets("New Plan Pipeline")
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     Set directorDict = CreateObject("Scripting.Dictionary")
-    Set directorCount = CreateObject("Scripting.Dictionary")
+    Set stageCount = CreateObject("Scripting.Dictionary")
     
-    ' Loop through the data to count sales per director
-    Dim i As Long
+    ' Gather all directors and stages in the dataset
     For i = 2 To lastRow
         director = ws.Cells(i, "B").Value ' Column "Director"
+        stage = ws.Cells(i, "E").Value    ' Column "Stage"
+        
+        ' Add director to dictionary
         If Not directorDict.exists(director) Then
-            directorDict.Add director, director
-            directorCount.Add director, 0
+            directorDict.Add director, CreateObject("Scripting.Dictionary")
         End If
-        ' Increment the count for each entry regardless of stage
-        directorCount(director) = directorCount(director) + 1
+        
+        ' Add stage to the director's dictionary and count occurrences
+        If Not directorDict(director).exists(stage) Then
+            directorDict(director).Add stage, 0
+        End If
+        directorDict(director)(stage) = directorDict(director)(stage) + 1
     Next i
     
     ' Create PowerPoint instance
@@ -42,18 +48,24 @@ Sub GenerateDirectorPresentations()
         Set pptPres = pptApp.Presentations.Open(slidePath)
         Set pptSlide = pptPres.Slides(2) ' Access Slide 2
         
-        ' Find Think-Cell chart and update it
+        ' Prepare data for Think-Cell chart
+        stages = directorDict(director).keys
+        Dim chartData() As Variant
+        ReDim chartData(1 To UBound(stages) + 1, 1 To 2)
+        
+        ' Populate chart data with stage names and counts
+        Dim j As Long
+        For j = 1 To UBound(stages) + 1
+            chartData(j, 1) = stages(j - 1) ' Stage name
+            chartData(j, 2) = directorDict(director)(stages(j - 1)) ' Count
+        Next j
+        
+        ' Update Think-Cell chart
         For Each tcChart In pptSlide.Shapes
             If tcChart.Type = msoLinkedOLEObject Then
                 If InStr(tcChart.OLEFormat.progID, "ThinkCell.Chart") > 0 Then
-                    ' Prepare data for Think-Cell chart
-                    Dim chartData As Variant
-                    ReDim chartData(1 To 2, 1 To 1)
-                    chartData(1, 1) = director
-                    chartData(2, 1) = directorCount(director)
-                    
-                    ' Update Think-Cell chart
                     tcChart.OLEFormat.Object.SetData chartData
+                    Exit For
                 End If
             End If
         Next tcChart
@@ -67,7 +79,7 @@ Sub GenerateDirectorPresentations()
     pptApp.Quit
     Set pptApp = Nothing
     Set directorDict = Nothing
-    Set directorCount = Nothing
+    Set stageCount = Nothing
     
     MsgBox "Presentations created successfully!", vbInformation
 End Sub
