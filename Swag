@@ -1,120 +1,105 @@
 Option Explicit
 
 Sub UpdateChartsForDirectors()
-
     Dim wb As Workbook: Set wb = ThisWorkbook
-    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Pipeline") ' <-- adjust if needed
+    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Pipeline")
     
-    ' Find last row in column A
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
     
-    ' Data body range (A2:E...)
-    Dim rngDataBody As Range
-    Set rngDataBody = ws.Range("A2:E" & lastRow)
+    ' Full range including header
+    Dim rngAll As Range
+    Set rngAll = ws.Range("A1:E" & lastRow)
     
-    ' Gather unique Directors (column B)
+    ' Build dictionary of unique directors in column B (rows 2+)
     Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
-    Dim cell As Range
-    For Each cell In ws.Range("B2:B" & lastRow)
-        If Not IsEmpty(cell.Value) Then
-            If Not dictDir.Exists(cell.Value) Then dictDir.Add cell.Value, True
+    Dim i As Long
+    For i = 2 To lastRow
+        If Not IsEmpty(ws.Cells(i, 2).Value) Then
+            If Not dictDir.Exists(ws.Cells(i, 2).Value) Then
+                dictDir.Add ws.Cells(i, 2).Value, True
+            End If
         End If
-    Next cell
+    Next i
     
-    ' Think-Cell add-in
+    ' Think-Cell object
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     
-    ' Start PowerPoint
+    ' PowerPoint
     Dim ppApp As Object
     Set ppApp = CreateObject("PowerPoint.Application")
     
-    ' File paths
     Const templatePath       As String = "C:\Samples\UpdateChart\template.pptx"
     Const saveFolder         As String = "C:\Samples\UpdateChart\"
     Const thinkCellChartName As String = "Chart1"
     
-    Dim dirName As Variant, rngFilter As Range
-    Dim pres As Object
+    Dim dirName As Variant, pres As Object, rngFilter As Range
     
-    ' Loop all directors
     For Each dirName In dictDir.Keys
-        
-        ' Remove existing filter, then filter on Director (column B => Field:=2)
+        ' Clear old filter, apply new filter
         ws.AutoFilterMode = False
-        rngDataBody.AutoFilter Field:=2, Criteria1:=dirName
+        rngAll.AutoFilter Field:=2, Criteria1:=dirName
         
         On Error Resume Next
-        Set rngFilter = rngDataBody.SpecialCells(xlCellTypeVisible)
+        Set rngFilter = rngAll.SpecialCells(xlCellTypeVisible)
         On Error GoTo 0
         
         If Not rngFilter Is Nothing Then
-            ' Delete old TempChartData sheet if it exists
+            ' Delete TempChartData if it exists
             On Error Resume Next
             Application.DisplayAlerts = False
-            If Not wb.Worksheets("TempChartData") Is Nothing Then
-                wb.Worksheets("TempChartData").Delete
-            End If
+            wb.Worksheets("TempChartData").Delete
             Application.DisplayAlerts = True
             On Error GoTo 0
             
-            ' Create a fresh TempChartData sheet
+            ' Create fresh TempChartData
             Dim wsTemp As Worksheet
             Set wsTemp = wb.Worksheets.Add
             wsTemp.Name = "TempChartData"
             
-            ' Dictionary for Stage => Count (Stage is in column E => 5)
-            Dim dictStage As Object
-            Set dictStage = CreateObject("Scripting.Dictionary")
+            ' Dictionary of Stage => count
+            Dim dictStage As Object: Set dictStage = CreateObject("Scripting.Dictionary")
             
-            Dim r As Range, stg As Variant
+            Dim r As Range
             For Each r In rngFilter.Columns(5).Cells
-                If Not IsEmpty(r.Value) Then
-                    stg = r.Value
-                    If dictStage.Exists(stg) Then
-                        dictStage(stg) = dictStage(stg) + 1
-                    Else
-                        dictStage.Add stg, 1
+                ' Skip header row
+                If r.Row > 1 Then
+                    If Not IsEmpty(r.Value) Then
+                        If dictStage.Exists(r.Value) Then
+                            dictStage(r.Value) = dictStage(r.Value) + 1
+                        Else
+                            dictStage.Add r.Value, 1
+                        End If
                     End If
                 End If
             Next r
             
             If dictStage.Count > 0 Then
-                ' Write stages (row 1) and counts (row 3)
-                Dim colPtr As Long: colPtr = 2
-                Dim key As Variant
+                Dim colPtr As Long: colPtr = 2  ' Start in column B
+                Dim key
+                
                 For Each key In dictStage.Keys
                     wsTemp.Cells(1, colPtr).Value = key
                     wsTemp.Cells(3, colPtr).Value = dictStage(key)
                     colPtr = colPtr + 1
                 Next key
                 
-                ' Define chart range (from B1..B3 through last used column)
                 Dim rngChart As Range
-                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), _
-                                            wsTemp.Cells(3, colPtr - 1))
+                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), wsTemp.Cells(3, colPtr - 1))
                 
-                ' Open the template
+                ' Open template read-only and update
                 Set pres = ppApp.Presentations.Open(templatePath, , True)
-                
-                ' Update the Think-Cell chart
                 tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
                 
-                ' Save the updated PPT
+                ' Save & close
                 pres.SaveAs saveFolder & dirName & "_updated.pptx"
                 pres.Close
             End If
         End If
-        
-        ' Clear filter before next iteration
         ws.AutoFilterMode = False
-        Set rngFilter = Nothing
     Next dirName
     
-    ' Quit PowerPoint
     ppApp.Quit
-    
-    MsgBox "All Director-specific presentations have been created.", vbInformation
-
+    MsgBox "All Director-specific presentations have been created."
 End Sub
