@@ -3,19 +3,18 @@ Option Explicit
 Sub UpdateChartsForDirectors()
 
     Dim wb As Workbook: Set wb = ThisWorkbook
-    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")  ' Change as needed
+    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")  ' <-- Adjust if needed
     
+    ' Identify last row in column A
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
     
-    ' A2:E... is the data body (excluding header in row 1)
+    ' Range for all data except header row (A2:E...)
     Dim rngDataBody As Range
     Set rngDataBody = ws.Range("A2:E" & lastRow)
     
-    ' Dictionary of unique Directors (column B => 2)
-    Dim dictDir As Object
-    Set dictDir = CreateObject("Scripting.Dictionary")
-    
+    ' Build a dictionary of unique Directors from column B
+    Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
     Dim cell As Range
     For Each cell In ws.Range("B2:B" & lastRow)
         If Not IsEmpty(cell.Value) Then
@@ -23,39 +22,37 @@ Sub UpdateChartsForDirectors()
         End If
     Next cell
     
-    ' Ensure Think-Cell is available
+    ' Get Think-Cell Add-In
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     
-    ' Create/attach to PowerPoint (late binding)
+    ' Create a PowerPoint instance (late binding)
     Dim ppApp As Object
     Set ppApp = CreateObject("PowerPoint.Application")
     
-    ' Variables
-    Dim dirName As Variant
-    Dim rngFilter As Range
-    Dim pres As Object  ' Late binding for PowerPoint.Presentation
-    
-    ' Paths
-    Const templatePath As String = "C:\Samples\UpdateChart\template.pptx"
-    Const saveFolder   As String = "C:\Samples\UpdateChart\"
+    ' Template path, save folder, Think-Cell chart name
+    Const templatePath      As String = "C:\Samples\UpdateChart\template.pptx"
+    Const saveFolder        As String = "C:\Samples\UpdateChart\"
     Const thinkCellChartName As String = "Chart1"
     
-    ' Loop over each Director
+    Dim dirName As Variant, rngFilter As Range
+    Dim pres As Object  ' Late binding for PowerPoint.Presentation
+    
+    ' Loop through each Director
     For Each dirName In dictDir.Keys
         
-        ' Clear any filters, then filter col B by current Director
+        ' Remove any existing AutoFilter; apply new filter on column B => Field:=2
         ws.AutoFilterMode = False
         rngDataBody.AutoFilter Field:=2, Criteria1:=dirName
         
-        ' Grab visible rows
+        ' Collect visible rows
         On Error Resume Next
         Set rngFilter = rngDataBody.SpecialCells(xlCellTypeVisible)
         On Error GoTo 0
         
         If Not rngFilter Is Nothing Then
             
-            ' Remove old TempChartData if it exists
+            ' Remove old TempChartData sheet if it exists
             On Error Resume Next
             Application.DisplayAlerts = False
             If Not wb.Worksheets("TempChartData") Is Nothing Then
@@ -69,7 +66,7 @@ Sub UpdateChartsForDirectors()
             Set wsTemp = wb.Worksheets.Add
             wsTemp.Name = "TempChartData"
             
-            ' Dictionary to count deals by Stage (column E => 5)
+            ' Dictionary to count deals by Stage (column E => 5th column)
             Dim dictStage As Object
             Set dictStage = CreateObject("Scripting.Dictionary")
             
@@ -85,31 +82,37 @@ Sub UpdateChartsForDirectors()
                 End If
             Next r
             
-            ' If there are any stages, place them in row 1, counts in row 3
+            ' If we have any stages for this Director...
             If dictStage.Count > 0 Then
                 
-                Dim i As Long: i = 1
+                ' We want Stage names in row 1, starting at column B (col index = 2)
+                ' And counts in row 3, also starting at column B
+                Dim i As Long: i = 2   ' Start writing at column B
                 Dim key As Variant
                 For Each key In dictStage.Keys
-                    wsTemp.Cells(1, i).Value = key          ' Stage name (Row 1)
-                    wsTemp.Cells(3, i).Value = dictStage(key) ' Stage count (Row 3)
+                    ' Stage name in row 1
+                    wsTemp.Cells(1, i).Value = key
+                    ' Stage count in row 3
+                    wsTemp.Cells(3, i).Value = dictStage(key)
                     i = i + 1
                 Next key
                 
-                ' Range is Row 1..3, from column 1 to last stage
+                ' Build final chart range from row 1 to row 3, columns B..(i-1)
                 Dim rngChart As Range
-                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 1), wsTemp.Cells(3, i - 1))
+                Set rngChart = wsTemp.Range( _
+                                wsTemp.Cells(1, 2), _
+                                wsTemp.Cells(3, i - 1))
                 
-                ' Open template read-only and untitled so it isn't overwritten
+                ' Open the template read-only and untitled so the original isn't changed
                 Set pres = ppApp.Presentations.Open( _
                     FileName:=templatePath, _
                     ReadOnly:=msoTrue, _
                     Untitled:=msoTrue)
                 
-                ' Update Think-Cell chart
+                ' Update the Think-Cell chart
                 tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
                 
-                ' Save & close to a new file
+                ' Save & close as a new file
                 pres.SaveAs saveFolder & dirName & "_updated.pptx"
                 pres.Close
             End If
