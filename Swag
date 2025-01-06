@@ -3,19 +3,18 @@ Option Explicit
 Sub UpdateChartsForDirectors()
 
     Dim wb As Workbook: Set wb = ThisWorkbook
-    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")  ' <-- Adjust if needed
+    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")  ' <-- change if needed
     
-    ' Identify last row of data in column A
+    ' Last row in column A
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
     
-    ' Range excluding header row (A2:E...)
+    ' Data body (A2:E...) => excludes header row
     Dim rngDataBody As Range
     Set rngDataBody = ws.Range("A2:E" & lastRow)
     
-    ' Dictionary of unique Directors (column B => 2)
+    ' Gather unique Directors from column B
     Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
-    
     Dim cell As Range
     For Each cell In ws.Range("B2:B" & lastRow)
         If Not IsEmpty(cell.Value) Then
@@ -23,38 +22,36 @@ Sub UpdateChartsForDirectors()
         End If
     Next cell
     
-    ' Get the Think-Cell add-in
+    ' Think-Cell add-in
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     
-    ' Create a PowerPoint instance (late binding)
+    ' PowerPoint (late binding)
     Dim ppApp As Object
     Set ppApp = CreateObject("PowerPoint.Application")
     
-    ' Paths, chart name
+    ' Paths
     Const templatePath       As String = "C:\Samples\UpdateChart\template.pptx"
     Const saveFolder         As String = "C:\Samples\UpdateChart\"
     Const thinkCellChartName As String = "Chart1"
     
-    Dim dirName As Variant
-    Dim rngFilter As Range
+    Dim dirName As Variant, rngFilter As Range
     Dim pres As Object  ' Late binding for PowerPoint.Presentation
     
-    ' Loop over each Director
+    ' Loop directors
     For Each dirName In dictDir.Keys
         
-        ' Clear any existing filters, then filter column B (Field:=2) by Director
+        ' Filter on column B => Field:=2
         ws.AutoFilterMode = False
         rngDataBody.AutoFilter Field:=2, Criteria1:=dirName
         
-        ' Grab visible cells
         On Error Resume Next
         Set rngFilter = rngDataBody.SpecialCells(xlCellTypeVisible)
         On Error GoTo 0
         
         If Not rngFilter Is Nothing Then
             
-            ' Remove old TempChartData (if exists)
+            ' Remove old TempChartData
             On Error Resume Next
             Application.DisplayAlerts = False
             If Not wb.Worksheets("TempChartData") Is Nothing Then
@@ -63,12 +60,12 @@ Sub UpdateChartsForDirectors()
             Application.DisplayAlerts = True
             On Error GoTo 0
             
-            ' Create fresh TempChartData sheet
+            ' New sheet
             Dim wsTemp As Worksheet
             Set wsTemp = wb.Worksheets.Add
             wsTemp.Name = "TempChartData"
             
-            ' Dictionary to count deals by Stage (Stage in col E => 5)
+            ' Dictionary for Stage => count (column E => 5)
             Dim dictStage As Object
             Set dictStage = CreateObject("Scripting.Dictionary")
             
@@ -84,50 +81,45 @@ Sub UpdateChartsForDirectors()
                 End If
             Next r
             
-            ' If we have Stages for this Director...
             If dictStage.Count > 0 Then
                 
-                ' We'll place them in Row 1 (Stage names) and Row 3 (counts),
-                ' starting from Column B (that is column index 2).
-                
+                ' Place stages in Row 1, starting Column B => (1,2)
+                ' Place counts in Row 3, same columns => (3,2), (3,3), etc.
                 Dim colPtr As Long
-                colPtr = 2  ' 2 => Column B
+                colPtr = 2  ' B = 2, C = 3, D = 4, etc.
                 
                 Dim key As Variant
                 For Each key In dictStage.Keys
-                    ' Row 1 => Stage name
                     wsTemp.Cells(1, colPtr).Value = key
-                    ' Row 3 => Stage count
                     wsTemp.Cells(3, colPtr).Value = dictStage(key)
-                    
                     colPtr = colPtr + 1
                 Next key
                 
-                ' Define the range from B1 to the last column in row 3
+                ' Define the chart range from B1..B3 out to the last used column
                 Dim rngChart As Range
-                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), wsTemp.Cells(3, colPtr - 1))
+                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), _
+                                            wsTemp.Cells(3, colPtr - 1))
                 
-                ' Open template read-only & untitled => original not overwritten
+                ' Open template read-only => original stays unchanged
                 Set pres = ppApp.Presentations.Open( _
-                    FileName:=templatePath, _
-                    ReadOnly:=msoTrue, _
-                    Untitled:=msoTrue)
+                            FileName:=templatePath, _
+                            ReadOnly:=msoTrue, _
+                            Untitled:=msoTrue)
                 
-                ' Update the Think-Cell chart
+                ' Update Think-Cell
                 tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
                 
-                ' Save & close
+                ' Save & close as new file
                 pres.SaveAs saveFolder & dirName & "_updated.pptx"
                 pres.Close
             End If
         End If
         
-        ' Clear filter for next iteration
         ws.AutoFilterMode = False
         Set rngFilter = Nothing
     Next dirName
     
-    ' Quit PowerPoint
+    ' Quit PPT
     ppApp.Quit
     
     MsgBox "All Director-specific presentations have been created.", vbInformation
