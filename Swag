@@ -1,105 +1,234 @@
+Below is a revised macro with thorough, line-by-line comments describing exactly what it does. Following the code, you’ll find tips on how to debug each major step.
+
 Option Explicit
 
 Sub UpdateChartsForDirectors()
+    ' ***********************************************************************
+    ' 1. SETUP REFERENCES
+    ' ***********************************************************************
     Dim wb As Workbook: Set wb = ThisWorkbook
+        ' Stores a reference to the currently running Excel file.
+
     Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Pipeline")
-    
+        ' Refers to the worksheet that contains the data (change name if needed).
+
     Dim lastRow As Long
+        ' Will hold the last used row number in Column A.
+
+    ' ***********************************************************************
+    ' 2. DETERMINE THE DATA RANGE
+    ' ***********************************************************************
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    
-    ' Full range including header
+        ' Finds the last non-empty cell in Column A by going upwards (xlUp).
+        ' Stores that row number in `lastRow`.
+
     Dim rngAll As Range
     Set rngAll = ws.Range("A1:E" & lastRow)
-    
-    ' Build dictionary of unique directors in column B (rows 2+)
+        ' Captures the entire range from A1 (the header) to E:lastRow (the final row).
+        ' E is column 5, so adjust if your data goes further.
+
+    ' ***********************************************************************
+    ' 3. BUILD A DICTIONARY OF UNIQUE DIRECTORS
+    ' ***********************************************************************
     Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
+        ' Scripting.Dictionary allows us to store unique keys (Directors).
+
     Dim i As Long
     For i = 2 To lastRow
+        ' Loops from row 2 down to the last row (row 1 is headers).
+        
         If Not IsEmpty(ws.Cells(i, 2).Value) Then
+            ' Checks if the cell in row i, column 2 (Director) has data.
             If Not dictDir.Exists(ws.Cells(i, 2).Value) Then
+                ' If this Director is not already in the dictionary, add it.
                 dictDir.Add ws.Cells(i, 2).Value, True
             End If
         End If
     Next i
-    
-    ' Think-Cell object
+
+    ' ***********************************************************************
+    ' 4. PREPARE THINK-CELL & POWERPOINT
+    ' ***********************************************************************
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
-    
-    ' PowerPoint
+        ' Reference to the Think-Cell COM add-in so we can call UpdateChart.
+
     Dim ppApp As Object
     Set ppApp = CreateObject("PowerPoint.Application")
-    
+        ' Creates a new instance of PowerPoint in the background.
+
     Const templatePath       As String = "C:\Samples\UpdateChart\template.pptx"
+        ' Path to your Think-Cell template PPT.
+
     Const saveFolder         As String = "C:\Samples\UpdateChart\"
+        ' Output folder where updated PPTs will be saved.
+
     Const thinkCellChartName As String = "Chart1"
-    
-    Dim dirName As Variant, pres As Object, rngFilter As Range
-    
+        ' The named Think-Cell chart inside your PowerPoint template.
+
+    ' Variables used inside the loop
+    Dim dirName As Variant
+    Dim pres As Object
+    Dim rngFilter As Range
+
+    ' ***********************************************************************
+    ' 5. LOOP OVER EACH DIRECTOR AND FILTER DATA
+    ' ***********************************************************************
     For Each dirName In dictDir.Keys
-        ' Clear old filter, apply new filter
+        ' Loops through each unique Director in the dictionary.
+
         ws.AutoFilterMode = False
+            ' Clears any existing AutoFilter to start fresh.
+
         rngAll.AutoFilter Field:=2, Criteria1:=dirName
-        
+            ' Applies a new filter on the entire data range:
+            '   Field:=2 means "Filter by column 2 (Director)."
+            '   Criteria1:=dirName is the Director we’re focusing on.
+
         On Error Resume Next
         Set rngFilter = rngAll.SpecialCells(xlCellTypeVisible)
+            ' Collects all visible cells after filtering (only the matching Director).
         On Error GoTo 0
-        
+
         If Not rngFilter Is Nothing Then
-            ' Delete TempChartData if it exists
+            ' If the filter did produce any visible rows (i.e., there's data for this Director).
+
+            ' ***********************************************************************
+            ' 5A. CREATE A TEMPORARY SHEET FOR STAGES & COUNTS
+            ' ***********************************************************************
             On Error Resume Next
             Application.DisplayAlerts = False
             wb.Worksheets("TempChartData").Delete
+                ' If a sheet named "TempChartData" already exists, delete it.
             Application.DisplayAlerts = True
             On Error GoTo 0
-            
-            ' Create fresh TempChartData
+
             Dim wsTemp As Worksheet
             Set wsTemp = wb.Worksheets.Add
+                ' Creates a new blank worksheet.
+
             wsTemp.Name = "TempChartData"
-            
-            ' Dictionary of Stage => count
+                ' Names it "TempChartData" (avoid duplicates above).
+
+            ' ***********************************************************************
+            ' 5B. BUILD A DICTIONARY OF STAGES & THEIR COUNTS
+            ' ***********************************************************************
             Dim dictStage As Object: Set dictStage = CreateObject("Scripting.Dictionary")
-            
+
             Dim r As Range
             For Each r In rngFilter.Columns(5).Cells
-                ' Skip header row
+                ' Looks in column 5 ("Stage") of the filtered range.
+                
                 If r.Row > 1 Then
+                    ' Skip the header row.
+                    
                     If Not IsEmpty(r.Value) Then
+                        ' If there's a stage name (not blank).
+                        
                         If dictStage.Exists(r.Value) Then
+                            ' If we've already seen this stage, increment the count.
                             dictStage(r.Value) = dictStage(r.Value) + 1
                         Else
+                            ' Otherwise, initialize it to 1.
                             dictStage.Add r.Value, 1
                         End If
                     End If
                 End If
             Next r
-            
+
+            ' ***********************************************************************
+            ' 5C. WRITE STAGES (ROW 1) AND COUNTS (ROW 3) INTO TEMPSHEET
+            ' ***********************************************************************
             If dictStage.Count > 0 Then
-                Dim colPtr As Long: colPtr = 2  ' Start in column B
-                Dim key
-                
+                Dim colPtr As Long: colPtr = 2  ' Start placing data in column B.
+                Dim key As Variant
+
                 For Each key In dictStage.Keys
                     wsTemp.Cells(1, colPtr).Value = key
+                        ' Stage name in row 1.
                     wsTemp.Cells(3, colPtr).Value = dictStage(key)
+                        ' Count in row 3 of the same column.
                     colPtr = colPtr + 1
+                        ' Move to the next column (B -> C -> D, etc.).
                 Next key
-                
+
+                ' ***********************************************************************
+                ' 5D. DEFINE THINK-CELL CHART RANGE (ROW 1 -> ROW 3)
+                ' ***********************************************************************
                 Dim rngChart As Range
                 Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), wsTemp.Cells(3, colPtr - 1))
-                
-                ' Open template read-only and update
+                    ' This goes from B1 to (colPtr-1 in row 3).
+                    ' Example: if colPtr is 6, we used columns B through E.
+
+                ' ***********************************************************************
+                ' 5E. OPEN TEMPLATE PPT, UPDATE THINK-CELL CHART, AND SAVE
+                ' ***********************************************************************
                 Set pres = ppApp.Presentations.Open(templatePath, , True)
-                tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
+                    ' Opens the template read-only.
                 
-                ' Save & close
+                tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
+                    ' Passes the rngChart to Think-Cell, mapping to "Chart1" in the PPT.
+
                 pres.SaveAs saveFolder & dirName & "_updated.pptx"
+                    ' Saves as something like "C:\Samples\UpdateChart\John Smith_updated.pptx"
+
                 pres.Close
+                    ' Close the updated presentation.
             End If
         End If
+
+        ' ***********************************************************************
+        ' 5F. CLEAR FILTER BEFORE NEXT DIRECTOR
+        ' ***********************************************************************
         ws.AutoFilterMode = False
     Next dirName
-    
+
+    ' ***********************************************************************
+    ' 6. QUIT POWERPOINT AND WRAP UP
+    ' ***********************************************************************
     ppApp.Quit
     MsgBox "All Director-specific presentations have been created."
 End Sub
+
+Debugging Tips
+	1.	Check Your Sheet and Data Range
+	•	Make sure “New Plan Pipeline” is the exact sheet name.
+	•	If the sheet has no data in column A or you have extra blank rows, lastRow might be off.
+	•	Debug by adding a line like:
+
+Debug.Print "Last Row: " & lastRow
+
+after you set lastRow. Then, run the macro and check the Immediate Window (in VBA Editor, press Ctrl+G to open “Immediate”).
+
+	2.	Verify Filter Range
+	•	We set rngAll = ws.Range("A1:E" & lastRow) and then do rngAll.AutoFilter Field:=2, Criteria1:=dirName.
+	•	Ensure column B actually has Directors.
+	•	After applying AutoFilter, try:
+
+Debug.Print "Director: " & dirName, "Visible Rows: " & rngAll.SpecialCells(xlCellTypeVisible).Count
+
+This can show if anything is being filtered.
+
+	3.	Dictionary Building
+	•	We loop from row 2 to lastRow for unique Directors.
+	•	If you suspect Directors are not being gathered, you can do:
+
+Debug.Print "Adding Director: " & ws.Cells(i, 2).Value
+
+in that loop.
+
+	4.	TempChartData Sheet
+	•	If you get an error trying to delete or rename it, confirm that no other code references that sheet.
+	5.	Check Column References
+	•	We assume Director is column B (Field:=2), Stage is column E (the 5th column). If that’s different, adjust those references.
+	6.	Think-Cell COM Add-in
+	•	Confirm that the Think-Cell add-in is installed and the name is correct: “thinkcell.addin”.
+	•	If you get an error at tcXlAddIn.UpdateChart ..., you may need to re-check your Think-Cell installation or the chart name (“Chart1”).
+	7.	PowerPoint Template
+	•	Double-check templatePath points to a valid file.
+	•	If the PPT opens minimized, you can do ppApp.Visible = True right after creating the PowerPoint application to see it in real time.
+	8.	Check the Output
+	•	After the script runs, look in saveFolder for the newly created PPT files.
+	•	Manually open one to see if the chart is updated correctly.
+
+By stepping through these points (especially adding Debug.Print lines), you’ll quickly see what is being captured at each stage and whether the dictionary building, filtering, or chart updates are failing to capture all data.
