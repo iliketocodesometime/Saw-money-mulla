@@ -1,127 +1,73 @@
-Option Explicit
-
-Sub UpdateChartsForDirectors()
-
-    Dim wb As Workbook: Set wb = ThisWorkbook
-    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")  ' <-- change if needed
-    
-    ' Last row in column A
+Sub GenerateDirectorPresentations()
+    Dim ws As Worksheet
+    Dim pptApp As Object
+    Dim pptPres As Object
+    Dim pptSlide As Object
+    Dim tcChart As Object
     Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    Dim directorDict As Object
+    Dim director As Variant
+    Dim directorCount As Object
+    Dim slidePath As String
+    Dim outputPath As String
     
-    ' Data body (A2:E...) => excludes header row
-    Dim rngDataBody As Range
-    Set rngDataBody = ws.Range("A2:E" & lastRow)
+    ' Set references to the Excel sheet and initialize variables
+    Set ws = ThisWorkbook.Sheets("New Plan Pipeline")
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    Set directorDict = CreateObject("Scripting.Dictionary")
+    Set directorCount = CreateObject("Scripting.Dictionary")
     
-    ' Gather unique Directors from column B
-    Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
-    Dim cell As Range
-    For Each cell In ws.Range("B2:B" & lastRow)
-        If Not IsEmpty(cell.Value) Then
-            If Not dictDir.Exists(cell.Value) Then dictDir.Add cell.Value, True
+    ' Loop through the data to count sales per director
+    Dim i As Long
+    For i = 2 To lastRow
+        director = ws.Cells(i, "B").Value ' Column "Director"
+        If Not directorDict.exists(director) Then
+            directorDict.Add director, director
+            directorCount.Add director, 0
         End If
-    Next cell
+        ' Increment the count for each entry regardless of stage
+        directorCount(director) = directorCount(director) + 1
+    Next i
     
-    ' Think-Cell add-in
-    Dim tcXlAddIn As Object
-    Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
+    ' Create PowerPoint instance
+    Set pptApp = CreateObject("PowerPoint.Application")
+    pptApp.Visible = True
     
-    ' PowerPoint (late binding)
-    Dim ppApp As Object
-    Set ppApp = CreateObject("PowerPoint.Application")
-    
-    ' Paths
-    Const templatePath       As String = "C:\Samples\UpdateChart\template.pptx"
-    Const saveFolder         As String = "C:\Samples\UpdateChart\"
-    Const thinkCellChartName As String = "Chart1"
-    
-    Dim dirName As Variant, rngFilter As Range
-    Dim pres As Object  ' Late binding for PowerPoint.Presentation
-    
-    ' Loop directors
-    For Each dirName In dictDir.Keys
-        
-        ' Filter on column B => Field:=2
-        ws.AutoFilterMode = False
-        rngDataBody.AutoFilter Field:=2, Criteria1:=dirName
-        
-        On Error Resume Next
-        Set rngFilter = rngDataBody.SpecialCells(xlCellTypeVisible)
-        On Error GoTo 0
-        
-        If Not rngFilter Is Nothing Then
-            
-            ' Remove old TempChartData
-            On Error Resume Next
-            Application.DisplayAlerts = False
-            If Not wb.Worksheets("TempChartData") Is Nothing Then
-                wb.Worksheets("TempChartData").Delete
-            End If
-            Application.DisplayAlerts = True
-            On Error GoTo 0
-            
-            ' New sheet
-            Dim wsTemp As Worksheet
-            Set wsTemp = wb.Worksheets.Add
-            wsTemp.Name = "TempChartData"
-            
-            ' Dictionary for Stage => count (column E => 5)
-            Dim dictStage As Object
-            Set dictStage = CreateObject("Scripting.Dictionary")
-            
-            Dim r As Range, stg As Variant
-            For Each r In rngFilter.Columns(5).Cells
-                If Not IsEmpty(r.Value) Then
-                    stg = r.Value
-                    If dictStage.Exists(stg) Then
-                        dictStage(stg) = dictStage(stg) + 1
-                    Else
-                        dictStage.Add stg, 1
-                    End If
-                End If
-            Next r
-            
-            If dictStage.Count > 0 Then
-                
-                ' Place stages in Row 1, starting Column B => (1,2)
-                ' Place counts in Row 3, same columns => (3,2), (3,3), etc.
-                Dim colPtr As Long
-                colPtr = 2  ' B = 2, C = 3, D = 4, etc.
-                
-                Dim key As Variant
-                For Each key In dictStage.Keys
-                    wsTemp.Cells(1, colPtr).Value = key
-                    wsTemp.Cells(3, colPtr).Value = dictStage(key)
-                    colPtr = colPtr + 1
-                Next key
-                
-                ' Define the chart range from B1..B3 out to the last used column
-                Dim rngChart As Range
-                Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), _
-                                            wsTemp.Cells(3, colPtr - 1))
-                
-                ' Open template read-only => original stays unchanged
-                Set pres = ppApp.Presentations.Open( _
-                            FileName:=templatePath, _
-                            ReadOnly:=msoTrue, _
-                            Untitled:=msoTrue)
-                
-                ' Update Think-Cell
-                tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
-                
-                ' Save & close as new file
-                pres.SaveAs saveFolder & dirName & "_updated.pptx"
-                pres.Close
-            End If
-        End If
-        
-        ws.AutoFilterMode = False
-        Set rngFilter = Nothing
-    Next dirName
-    
-    ' Quit PPT
-    ppApp.Quit
-    
-    MsgBox "All Director-specific presentations have been created.", vbInformation
+    ' Set the template path (update this path accordingly)
+    slidePath = "C:\Path\To\Template.pptx"
+    outputPath = "C:\Path\To\Output\"
 
+    ' Loop through each director to create presentations
+    For Each director In directorDict.Keys
+        Set pptPres = pptApp.Presentations.Open(slidePath)
+        Set pptSlide = pptPres.Slides(2) ' Access Slide 2
+        
+        ' Find Think-Cell chart and update it
+        For Each tcChart In pptSlide.Shapes
+            If tcChart.Type = msoLinkedOLEObject Then
+                If InStr(tcChart.OLEFormat.progID, "ThinkCell.Chart") > 0 Then
+                    ' Prepare data for Think-Cell chart
+                    Dim chartData As Variant
+                    ReDim chartData(1 To 2, 1 To 1)
+                    chartData(1, 1) = director
+                    chartData(2, 1) = directorCount(director)
+                    
+                    ' Update Think-Cell chart
+                    tcChart.OLEFormat.Object.SetData chartData
+                End If
+            End If
+        Next tcChart
+        
+        ' Save the presentation with the director's name
+        pptPres.SaveAs outputPath & director & "_Presentation.pptx"
+        pptPres.Close
+    Next director
+    
+    ' Cleanup
+    pptApp.Quit
+    Set pptApp = Nothing
+    Set directorDict = Nothing
+    Set directorCount = Nothing
+    
+    MsgBox "Presentations created successfully!", vbInformation
 End Sub
