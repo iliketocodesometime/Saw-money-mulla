@@ -1,1 +1,64 @@
+Option Explicit
 
+Sub UpdateChartsForDirectors()
+
+    Dim wb As Workbook: Set wb = ThisWorkbook
+    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Sales")
+    Dim rngData As Range, rngDir As Range, rngFilter As Range
+    Dim lastRow As Long, dict As Object, dirName As Variant
+    
+    ' Identify the range of all data
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    Set rngData = ws.Range("A1").CurrentRegion   ' or specify exact columns if needed
+    Set rngDir = ws.Range("A2:A" & lastRow)     ' assume "Director" is in column A
+    
+    ' Collect unique directors
+    Set dict = CreateObject("Scripting.Dictionary")
+    Dim cell As Range
+    For Each cell In rngDir
+        If Not dict.Exists(cell.Value) Then dict.Add cell.Value, 1
+    Next cell
+    
+    ' Get Think-Cell Add-In
+    Dim tcXlAddIn As Object
+    Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
+    
+    ' Create or attach to PowerPoint
+    Dim ppApp As Object
+    Set ppApp = New PowerPoint.Application
+    
+    Dim pres As PowerPoint.Presentation
+
+    ' Loop through each director and update
+    For Each dirName In dict.Keys
+        
+        ' Filter your main dataset to just this director
+        rngData.AutoFilter Field:=1, Criteria1:=dirName  ' Field:=1 means first column
+        
+        On Error Resume Next
+        Set rngFilter = rngData.SpecialCells(xlCellTypeVisible)
+        On Error GoTo 0
+        
+        If Not rngFilter Is Nothing Then
+            
+            ' Open the template in invisible mode
+            Set pres = ppApp.Presentations.Open( _
+                      Filename:="C:\Samples\UpdateChart\template.pptx", _
+                      Untitled:=msoTrue, _
+                      WithWindow:=msoFalse)
+            
+            ' Update the Think-Cell chart
+            tcXlAddIn.UpdateChart pres, "Chart1", rngFilter, False
+            
+            ' Save and close
+            pres.SaveAs "C:\Samples\UpdateChart\" & dirName & "_updated.pptx"
+            pres.Close
+        End If
+        
+        Set rngFilter = Nothing
+        rngData.AutoFilter
+    Next dirName
+    
+    ppApp.Quit
+
+End Sub
