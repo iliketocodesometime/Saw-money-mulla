@@ -2,9 +2,7 @@ Option Explicit
 
 Sub GeneratePPTsPerDirector()
 
-    '--------------------------------------------------------------------------------
-    '  [1] WORKSHEETS + HELPER SHEET
-    '--------------------------------------------------------------------------------
+    '----- (1) Identify the relevant sheets -----
     Dim wsPipeline As Worksheet, wsSales As Worksheet, wsCrossSell As Worksheet
     On Error Resume Next
     Set wsPipeline = ThisWorkbook.Sheets("New Plan Pipeline")
@@ -13,7 +11,7 @@ Sub GeneratePPTsPerDirector()
     On Error GoTo 0
     
     If wsPipeline Is Nothing Or wsSales Is Nothing Or wsCrossSell Is Nothing Then
-        MsgBox "Missing one or more required sheets (New Plan Pipeline, New Plan Sales, Cross Sell Closed Won)."
+        MsgBox "Missing required sheets (New Plan Pipeline / New Plan Sales / Cross Sell Closed Won)."
         Exit Sub
     End If
     
@@ -27,10 +25,8 @@ Sub GeneratePPTsPerDirector()
         wsHelper.Name = "Helper"
         wsHelper.Visible = xlSheetHidden
     End If
-
-    '--------------------------------------------------------------------------------
-    '  [2] GATHER DIRECTORS (from "New Plan Pipeline" col B)
-    '--------------------------------------------------------------------------------
+    
+    '----- (2) Gather Directors from "New Plan Pipeline" (col B) -----
     Dim lastRow As Long
     lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, "A").End(xlUp).Row
     
@@ -46,11 +42,7 @@ Sub GeneratePPTsPerDirector()
         End If
     Next i
     
-    '--------------------------------------------------------------------------------
-    '  [3] PRE-COMPUTE TOTALS ACROSS ALL DIRECTORS
-    '       a) FROM "New Plan Sales"
-    '       b) FROM "Cross Sell Closed Won" FOR OPPORTUNITY TYPES
-    '--------------------------------------------------------------------------------
+    '----- (3) Pre-compute totals (across all directors) from "New Plan Sales" -----
     Dim lastRowSales As Long
     lastRowSales = wsSales.Cells(wsSales.Rows.Count, "A").End(xlUp).Row
     
@@ -58,7 +50,11 @@ Sub GeneratePPTsPerDirector()
     Dim totalAllAUM As Double
     Dim totalAllParticipants As Long
     
-    ' [3a] New Plan Sales (Cols: A=Account Name, C=Director, D=Estimated Participants, F=Total AUM)
+    ' Adjust columns as needed:
+    '   A: Account Name
+    '   C: Director
+    '   D: Estimated Participants
+    '   F: Total AUM (converted)
     For i = 2 To lastRowSales
         If Trim(wsSales.Cells(i, "A").Value) <> "" Then
             totalAllCount = totalAllCount + 1
@@ -67,37 +63,39 @@ Sub GeneratePPTsPerDirector()
         totalAllParticipants = totalAllParticipants + wsSales.Cells(i, "D").Value
     Next i
     
-    ' [3b] Cross Sell Closed Won (Cols: A=Director, B=Opp Name, C=Opp Record Type, D=Close Date, E=Stage)
-    '      We'll track total closed-won across ALL directors for each of the 5 Opportunity Types
-    '      in the order that matches the Slide 3 table columns: 2..6
-    
-    ' Opportunity types in the exact order needed for Slide 3 table:
-    Dim opportunityType(1 To 5) As String
-    opportunityType(1) = "Charitable Giving Opportunity"
-    opportunityType(2) = "Corporate Cash Opportunity"
-    opportunityType(3) = "Institutional Consulting Opportunity"
-    opportunityType(4) = "Non-Qualified Deferred Compensation Opportunity"
-    opportunityType(5) = "Retirement Opportunity"
-    
-    Dim totalOppCounts(1 To 5) As Long ' For all directors
+    '----- (3B) Pre-compute Cross-Sell totals (for all directors) from "Cross Sell Closed Won" -----
     Dim lastRowCross As Long
     lastRowCross = wsCrossSell.Cells(wsCrossSell.Rows.Count, "A").End(xlUp).Row
     
+    ' Define the 5 Opportunity Types in the desired order
+    Dim arrOppTypes As Variant
+    arrOppTypes = Array( _
+        "Charitable Giving Opportunity", _
+        "Corporate Cash Opportunity", _
+        "Institutional Consulting Opportunity", _
+        "Non-Qualified Deferred Compensation Opportunity", _
+        "Retirement Opportunity" _
+    )
+    
+    ' Arrays to store total counts for each Opportunity Type
+    Dim totalCrossSellCounts(1 To 5) As Long
+    
+    ' Loop once to get "Totals" for all directors
     For i = 2 To lastRowCross
-        Dim oppTypeAll As String
-        oppTypeAll = Trim(wsCrossSell.Cells(i, "C").Value) ' "Opportunity Record Type"
-        
-        Dim idx As Long
-        For idx = 1 To 5
-            If oppTypeAll = opportunityType(idx) Then
-                totalOppCounts(idx) = totalOppCounts(idx) + 1
+        ' Only count if Stage is "Closed Won" (adjust if needed)
+        If Trim(wsCrossSell.Cells(i, "E").Value) = "Closed Won" Then
+            Dim thisOppType As String
+            thisOppType = Trim(wsCrossSell.Cells(i, "C").Value)  ' "Opportunity Record Type"
+            
+            Dim idx As Long
+            idx = MatchOppTypeIndex(thisOppType, arrOppTypes)
+            If idx > 0 Then
+                totalCrossSellCounts(idx) = totalCrossSellCounts(idx) + 1
             End If
-        Next idx
+        End If
     Next i
     
-    '--------------------------------------------------------------------------------
-    '  [4] PREPARE THINK-CELL & POWERPOINT REFERENCES
-    '--------------------------------------------------------------------------------
+    '----- (4) Prepare references to Think-Cell (if installed) & PowerPoint -----
     Dim tcXlAddIn As Object
     On Error Resume Next
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
@@ -107,9 +105,7 @@ Sub GeneratePPTsPerDirector()
     Dim ppApp As PowerPoint.Application
     Set ppApp = New PowerPoint.Application
     
-    '--------------------------------------------------------------------------------
-    '  [5] DEFINE STAGE LABELS FOR "New Plan Pipeline"
-    '--------------------------------------------------------------------------------
+    '----- (5) Define your stage labels -----
     Dim stageLabels As Variant
     stageLabels = Array( _
         "Active Pursuit", _
@@ -118,21 +114,20 @@ Sub GeneratePPTsPerDirector()
         "Contract Negotiation" _
     )
     
-    '--------------------------------------------------------------------------------
-    '  [6] FOR EACH DIRECTOR, GENERATE A PPT
-    '--------------------------------------------------------------------------------
+    '----- (6) For each Director, generate a PPT -----
     Dim director As Variant
     For Each director In dictDirs.Keys
         
-        '=== (a) RESET ARRAYS FOR STAGE COUNTS (Think-Cell Chart1) ===
+        '=== (a) Reset arrays for stage counts (Think-Cell Chart1) ===
         Dim countStages(1 To 4) As Long
         countStages(1) = 0: countStages(2) = 0
         countStages(3) = 0: countStages(4) = 0
         
-        '=== (b) ARRAYS FOR CROSS SELL CLOSED WON (OPP TYPES) FOR THIS DIRECTOR ===
-        Dim dirOppCounts(1 To 5) As Long
+        '=== (b) Arrays for the PPT chart "Chart 13" ===
+        Dim sumAUM(1 To 4) As Double
+        Dim sumParticipants(1 To 4) As Long
         
-        '=== (c) LOOP OVER "New Plan Pipeline" FOR THIS DIRECTOR ===
+        '=== (c) Loop over "New Plan Pipeline" for this Director ===
         For i = 2 To lastRow
             If Trim(wsPipeline.Cells(i, "B").Value) = director Then
                 Dim currentStage As String
@@ -141,27 +136,36 @@ Sub GeneratePPTsPerDirector()
                 Select Case currentStage
                     Case "Active Pursuit"
                         countStages(1) = countStages(1) + 1
+                        sumAUM(1) = sumAUM(1) + wsPipeline.Cells(i, "C").Value
+                        sumParticipants(1) = sumParticipants(1) + wsPipeline.Cells(i, "D").Value
+                        
                     Case "Shortlisted / Decision Pending"
                         countStages(2) = countStages(2) + 1
+                        sumAUM(2) = sumAUM(2) + wsPipeline.Cells(i, "C").Value
+                        sumParticipants(2) = sumParticipants(2) + wsPipeline.Cells(i, "D").Value
+                        
                     Case "Verbal Agreement"
                         countStages(3) = countStages(3) + 1
+                        sumAUM(3) = sumAUM(3) + wsPipeline.Cells(i, "C").Value
+                        sumParticipants(3) = sumParticipants(3) + wsPipeline.Cells(i, "D").Value
+                        
                     Case "Contract Negotiation"
                         countStages(4) = countStages(4) + 1
+                        sumAUM(4) = sumAUM(4) + wsPipeline.Cells(i, "C").Value
+                        sumParticipants(4) = sumParticipants(4) + wsPipeline.Cells(i, "D").Value
                 End Select
             End If
         Next i
         
-        '=== (d) FILL HELPER FOR THINK-CELL "Chart1" (ROWS 1..3) ===
+        '=== (d) Fill "Helper" sheet for Think-Cell Chart1 (rows 1..3) ===
         If Not tcXlAddIn Is Nothing Then
             With wsHelper
-                ' Row 1: Stage labels
                 .Range("A1").Value = ""
                 .Range("B1").Value = stageLabels(0)
                 .Range("C1").Value = stageLabels(1)
                 .Range("D1").Value = stageLabels(2)
                 .Range("E1").Value = stageLabels(3)
                 
-                ' Row 3: # in stage (counts)
                 .Range("A3").Value = ""
                 .Range("B3").Value = countStages(1)
                 .Range("C3").Value = countStages(2)
@@ -170,16 +174,16 @@ Sub GeneratePPTsPerDirector()
             End With
         End If
         
-        '=== (e) DIRECTOR-SPECIFIC "NEW PLAN SALES" DATA (FOR TABLE 5) ===
-        Dim directorCount As Long, directorAUM As Double, directorParticipants As Long
+        '=== (e) Director-specific "New Plan Sales" data (for Table 5) ===
+        Dim directorCount As Long
+        Dim directorAUM As Double
+        Dim directorParticipants As Long
+        
         directorCount = 0
         directorAUM = 0
         directorParticipants = 0
         
-        Dim lastRowSales2 As Long
-        lastRowSales2 = wsSales.Cells(wsSales.Rows.Count, "A").End(xlUp).Row
-        
-        For i = 2 To lastRowSales2
+        For i = 2 To lastRowSales
             If Trim(wsSales.Cells(i, "C").Value) = director Then
                 If Trim(wsSales.Cells(i, "A").Value) <> "" Then
                     directorCount = directorCount + 1
@@ -189,38 +193,20 @@ Sub GeneratePPTsPerDirector()
             End If
         Next i
         
-        '=== (f) DIRECTOR-SPECIFIC CROSS SELL CLOSED WON ===
-        Dim lastRowCross2 As Long
-        lastRowCross2 = wsCrossSell.Cells(wsCrossSell.Rows.Count, "A").End(xlUp).Row
-        
-        For i = 2 To lastRowCross2
-            If Trim(wsCrossSell.Cells(i, "A").Value) = director Then
-                Dim oppTypeDir As String
-                oppTypeDir = Trim(wsCrossSell.Cells(i, "C").Value) ' Opp Record Type
-                
-                Dim j As Long
-                For j = 1 To 5
-                    If oppTypeDir = opportunityType(j) Then
-                        dirOppCounts(j) = dirOppCounts(j) + 1
-                    End If
-                Next j
-            End If
-        Next i
-        
-        '=== (g) OPEN PPT TEMPLATE INVISIBLY ===
+        '=== (f) Open the PowerPoint template invisibly ===
         Dim pres As PowerPoint.Presentation
         Set pres = ppApp.Presentations.Open( _
             Filename:="C:\TemplateFolder\template1.pptx", _
             WithWindow:=msoFalse)
         
-        '=== (h) UPDATE THINK-CELL Chart1 (if installed) ===
+        '=== (g) Update Think-Cell Chart1 on slide 2 (if available) ===
         If Not tcXlAddIn Is Nothing Then
             Dim rngData As Range
             Set rngData = wsHelper.Range("A1:E3")
             tcXlAddIn.UpdateChart pres.Slides(2), "Chart1", rngData, False
         End If
         
-        '=== (i) SLIDE 1: DIRECTOR & QUARTER ===
+        '=== (h) Slide 1 text boxes: "Title" & "Quarter" ===
         Dim currentQuarter As String
         currentQuarter = "Q" & CStr(Int((Month(Date) - 1) / 3 + 1)) & " " & Year(Date)
         
@@ -229,7 +215,7 @@ Sub GeneratePPTsPerDirector()
             .Shapes("Quarter").TextFrame.TextRange.Text = currentQuarter
         End With
         
-        '=== (j) SLIDE 2: TABLE 5 (4x4) ===
+        '=== (i) Slide 2 table "Table 5" ===
         Dim shpTable As PowerPoint.Shape
         Set shpTable = pres.Slides(2).Shapes("Table 5")
         
@@ -265,7 +251,7 @@ Sub GeneratePPTsPerDirector()
             shpTable.Table.Cell(4, 4).Shape.TextFrame.TextRange.Text = "N/A"
         End If
         
-        '=== (k) SLIDE 2: CHART 13 (if it exists) ===
+        '=== (j) Slide 2 "Chart 13" (PowerPoint chart with embedded workbook) ===
         Dim shpChart As PowerPoint.Shape
         On Error Resume Next
         Set shpChart = pres.Slides(2).Shapes("Chart 13")
@@ -275,80 +261,137 @@ Sub GeneratePPTsPerDirector()
             If shpChart.HasChart Then
                 Dim ppChart As PowerPoint.Chart
                 Set ppChart = shpChart.Chart
+                
+                ' Activate the embedded workbook
                 ppChart.ChartData.Activate
                 
                 Dim wbChart As Excel.Workbook
                 Set wbChart = ppChart.ChartData.Workbook
+                
                 Dim wsChart As Excel.Worksheet
-                Set wsChart = wbChart.Worksheets(1)
+                Set wsChart = wbChart.Worksheets(1) ' Adjust if needed
                 
-                ' Example layout in wsChart:
+                ' Example layout: columns for Stage, # in Stage, AUM, Participants
                 wsChart.Range("A1:D1").Value = Array("Stage", "# in Stage", "Estimated AUM", "Est. Participants")
-                ' ... fill your stage data as desired ...
                 
-                ' Close + Refresh so data is visible immediately
+                ' Row 2: stage 1
+                wsChart.Range("A2").Value = stageLabels(0)
+                wsChart.Range("B2").Value = countStages(1)
+                wsChart.Range("C2").Value = sumAUM(1)
+                wsChart.Range("D2").Value = sumParticipants(1)
+                
+                ' Row 3: stage 2
+                wsChart.Range("A3").Value = stageLabels(1)
+                wsChart.Range("B3").Value = countStages(2)
+                wsChart.Range("C3").Value = sumAUM(2)
+                wsChart.Range("D3").Value = sumParticipants(2)
+                
+                ' Row 4: stage 3
+                wsChart.Range("A4").Value = stageLabels(2)
+                wsChart.Range("B4").Value = countStages(3)
+                wsChart.Range("C4").Value = sumAUM(3)
+                wsChart.Range("D4").Value = sumParticipants(3)
+                
+                ' Row 5: stage 4
+                wsChart.Range("A5").Value = stageLabels(3)
+                wsChart.Range("B5").Value = countStages(4)
+                wsChart.Range("C5").Value = sumAUM(4)
+                wsChart.Range("D5").Value = sumParticipants(4)
+                
+                ' Row 6: "Grand Total"
+                wsChart.Range("A6").Value = "Grand Total"
+                wsChart.Range("B6").Formula = "=SUM(B2:B5)"
+                wsChart.Range("C6").Formula = "=SUM(C2:C5)"
+                wsChart.Range("D6").Formula = "=SUM(D2:D5)"
+                
+                ' 1) Close the embedded workbook to ensure updates are saved
                 ppChart.ChartData.Workbook.Close True
+                
+                ' 2) Refresh the chart
                 ppChart.Refresh
+                
+                ' 3) Allow events to process
                 DoEvents
             End If
         End If
         
-        '=== (l) SLIDE 3: TABLE 3 (4x6) CROSS SELL CLOSED WON ===
-        '   R1C2..R1C6: Opportunity Type
-        '   R2C2..R2C6: All directors total ( totalOppCounts )
-        '   R3C2..R3C6: Director-specific ( dirOppCounts )
-        '   R4C2..R4C6: % of channel = row3 / row2
+        '=== (k) Slide 3 "Table 3" for Cross-Sell (4x6) ===
+        ' We need to count Cross-Sell for THIS director
+        Dim dirCrossSellCounts(1 To 5) As Long
+        
+        For i = 2 To lastRowCross
+            If Trim(wsCrossSell.Cells(i, "E").Value) = "Closed Won" Then
+                If Trim(wsCrossSell.Cells(i, "A").Value) = director Then  ' "Director" column
+                    Dim oppType As String
+                    oppType = Trim(wsCrossSell.Cells(i, "C").Value) ' "Opportunity Record Type"
+                    
+                    Dim oppIdx As Long
+                    oppIdx = MatchOppTypeIndex(oppType, arrOppTypes)
+                    If oppIdx > 0 Then
+                        dirCrossSellCounts(oppIdx) = dirCrossSellCounts(oppIdx) + 1
+                    End If
+                End If
+            End If
+        Next i
+        
         Dim shpTable3 As PowerPoint.Shape
         On Error Resume Next
         Set shpTable3 = pres.Slides(3).Shapes("Table 3")
         On Error GoTo 0
         
         If Not shpTable3 Is Nothing Then
-            ' Row 1, columns 2..6: Opportunity Type
-            Dim colIndex As Long
-            For colIndex = 2 To 6
-                shpTable3.Table.Cell(1, colIndex).Shape.TextFrame.TextRange.Text = _
-                    opportunityType(colIndex - 1)
-            Next colIndex
-            
-            ' Row 2, columns 2..6: totalOppCounts
-            For colIndex = 2 To 6
-                shpTable3.Table.Cell(2, colIndex).Shape.TextFrame.TextRange.Text = _
-                    CStr(totalOppCounts(colIndex - 1))
-            Next colIndex
-            
-            ' Row 3, columns 2..6: dirOppCounts
-            For colIndex = 2 To 6
-                shpTable3.Table.Cell(3, colIndex).Shape.TextFrame.TextRange.Text = _
-                    CStr(dirOppCounts(colIndex - 1))
-            Next colIndex
-            
-            ' Row 4, columns 2..6: % of channel = row3 / row2
-            For colIndex = 2 To 6
-                Dim valAll As Long
-                valAll = totalOppCounts(colIndex - 1)
+            With shpTable3.Table
+                Dim col As Long
                 
-                Dim valDir As Long
-                valDir = dirOppCounts(colIndex - 1)
+                ' Row 1, columns 2..6: show the Opportunity Type headings
+                '   (If you have headings already in the PPT template, you could skip this loop.)
+                For col = 1 To 5
+                    .Cell(1, col + 1).Shape.TextFrame.TextRange.Text = arrOppTypes(col - 1)
+                Next col
                 
-                If valAll > 0 Then
-                    shpTable3.Table.Cell(4, colIndex).Shape.TextFrame.TextRange.Text = _
-                        Format(valDir / valAll, "0.0%")
-                Else
-                    shpTable3.Table.Cell(4, colIndex).Shape.TextFrame.TextRange.Text = "0%"
-                End If
-            Next colIndex
+                ' Row 2, columns 2..6: totalCrossSellCounts
+                For col = 1 To 5
+                    .Cell(2, col + 1).Shape.TextFrame.TextRange.Text = CStr(totalCrossSellCounts(col))
+                Next col
+                
+                ' Row 3, columns 2..6: dirCrossSellCounts
+                For col = 1 To 5
+                    .Cell(3, col + 1).Shape.TextFrame.TextRange.Text = CStr(dirCrossSellCounts(col))
+                Next col
+                
+                ' Row 4, columns 2..6: % = Row3 / Row2
+                For col = 1 To 5
+                    If totalCrossSellCounts(col) > 0 Then
+                        .Cell(4, col + 1).Shape.TextFrame.TextRange.Text = _
+                            Format(dirCrossSellCounts(col) / totalCrossSellCounts(col), "0.0%")
+                    Else
+                        .Cell(4, col + 1).Shape.TextFrame.TextRange.Text = "N/A"
+                    End If
+                Next col
+            End With
         End If
         
-        '=== (m) SAVE & CLOSE THIS PPT ===
+        '=== (l) Save & Close the presentation ===
         pres.SaveAs "C:\OutputPPTs\" & director & "_Pipeline.pptx"
         pres.Close
     Next director
     
-    '--------------------------------------------------------------------------------
-    '  [7] CLEANUP
-    '--------------------------------------------------------------------------------
+    '----- (7) Cleanup -----
     ppApp.Quit
     MsgBox "All PowerPoints generated successfully!"
 
 End Sub
+
+'----------------------------------------------------------------------------------
+' Helper function to match an opportunity type to our arrOppTypes array.
+' Returns the array index (1-based) if found, or 0 if not found.
+'----------------------------------------------------------------------------------
+Private Function MatchOppTypeIndex(ByVal oppType As String, ByVal arrOppTypes As Variant) As Long
+    Dim i As Long
+    For i = LBound(arrOppTypes) To UBound(arrOppTypes)
+        If oppType = arrOppTypes(i) Then
+            MatchOppTypeIndex = i - LBound(arrOppTypes) + 1  ' convert to 1-based
+            Exit For
+        End If
+    Next i
+End Function
