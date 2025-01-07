@@ -1,44 +1,54 @@
 Option Explicit
 
 Sub GeneratePPTsPerDirector()
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Sheets("New Plan Pipeline")
+    Dim wsPipeline As Worksheet
+    Set wsPipeline = ThisWorkbook.Sheets("New Plan Pipeline")
+
+    Dim wsHelper As Worksheet
+    On Error Resume Next
+    Set wsHelper = ThisWorkbook.Sheets("Helper")
+    On Error GoTo 0
+    
+    ' Create hidden "Helper" if it doesn't already exist
+    If wsHelper Is Nothing Then
+        Set wsHelper = ThisWorkbook.Worksheets.Add
+        wsHelper.Name = "Helper"
+        wsHelper.Visible = xlSheetHidden
+    End If
     
     Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, "A").End(xlUp).Row
     
-    ' Collect unique directors from column B
+    ' Gather unique directors
     Dim dictDirs As Object
     Set dictDirs = CreateObject("Scripting.Dictionary")
     
     Dim i As Long, dirName As String
     For i = 2 To lastRow
-        dirName = Trim(ws.Cells(i, "B").Value)
+        dirName = Trim(wsPipeline.Cells(i, "B").Value)
         If dirName <> "" Then
             If Not dictDirs.Exists(dirName) Then dictDirs.Add dirName, dirName
         End If
     Next i
     
-    ' Prepare references to think-cell and PowerPoint
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     
     Dim ppApp As PowerPoint.Application
     Set ppApp = New PowerPoint.Application
     
-    ' We assume four stage labels below. Adapt as needed.
+    ' Adjust stage labels to match your data
     Dim stageLabels As Variant
     stageLabels = Array("Stage 1", "Stage 2", "Stage 3", "Stage 4")
     
-    ' For each director, count deals by stage and update PPT
     Dim director As Variant
     For Each director In dictDirs.Keys
         Dim countStages(1 To 4) As Long
         
-        ' Tally up each stage for this director
+        ' Count deals by stage for this director
         For i = 2 To lastRow
-            If Trim(ws.Cells(i, "B").Value) = director Then
-                Select Case Trim(ws.Cells(i, "E").Value)
+            If Trim(wsPipeline.Cells(i, "B").Value) = director Then
+                Select Case Trim(wsPipeline.Cells(i, "E").Value)
                     Case "Stage 1": countStages(1) = countStages(1) + 1
                     Case "Stage 2": countStages(2) = countStages(2) + 1
                     Case "Stage 3": countStages(3) = countStages(3) + 1
@@ -47,8 +57,8 @@ Sub GeneratePPTsPerDirector()
             End If
         Next i
         
-        ' Place the stage labels in B1:E1 and counts in B3:E3 on a helper sheet
-        With ThisWorkbook.Sheets("Helper")
+        ' Place labels in B1:E1 and counts in B3:E3 on "Helper"
+        With wsHelper
             .Range("B1").Value = stageLabels(0)
             .Range("C1").Value = stageLabels(1)
             .Range("D1").Value = stageLabels(2)
@@ -68,10 +78,10 @@ Sub GeneratePPTsPerDirector()
         
         ' Update the chart on slide 2
         Dim rngData As Range
-        Set rngData = ThisWorkbook.Sheets("Helper").Range("B1:E3")
+        Set rngData = wsHelper.Range("B1:E3")
         tcXlAddIn.UpdateChart pres.Slides(2), "Chart1", rngData, False
         
-        ' Save & close
+        ' Save and close
         pres.SaveAs "C:\OutputPPTs\" & director & "_Pipeline.pptx"
         pres.Close
     Next director
