@@ -1,11 +1,189 @@
- ' Compute current quarter string (e.g., "Q1 2025")
+Option Explicit
+
+Sub GeneratePPTsPerDirector()
+
+    '----- [1] PREPARE WORKSHEETS -----
+    Dim wsPipeline As Worksheet
+    Dim wsSales As Worksheet
+    
+    Set wsPipeline = ThisWorkbook.Sheets("New Plan Pipeline")
+    Set wsSales = ThisWorkbook.Sheets("New Plan Sales")
+    
+    ' Create hidden "Helper" if it doesn't exist
+    Dim wsHelper As Worksheet
+    On Error Resume Next
+    Set wsHelper = ThisWorkbook.Sheets("Helper")
+    On Error GoTo 0
+    If wsHelper Is Nothing Then
+        Set wsHelper = ThisWorkbook.Worksheets.Add
+        wsHelper.Name = "Helper"
+        wsHelper.Visible = xlSheetHidden
+    End If
+    
+    '----- [2] GATHER DIRECTORS FROM "New Plan Pipeline" -----
+    Dim lastRow As Long
+    lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, "A").End(xlUp).Row
+    
+    Dim dictDirs As Object
+    Set dictDirs = CreateObject("Scripting.Dictionary")
+    
+    Dim i As Long, dirName As String
+    For i = 2 To lastRow
+        dirName = Trim(wsPipeline.Cells(i, "B").Value)
+        If dirName <> "" Then
+            If Not dictDirs.Exists(dirName) Then dictDirs.Add dirName, dirName
+        End If
+    Next i
+    
+    '----- [3] PRE-COMPUTE TOTALS ACROSS ALL DIRECTORS FROM "New Plan Sales" -----
+    Dim lastRowSales As Long
+    lastRowSales = wsSales.Cells(wsSales.Rows.Count, "A").End(xlUp).Row
+    
+    Dim totalAllCount As Long
+    Dim totalAllAUM As Double
+    Dim totalAllParticipants As Long
+    
+    ' Columns (adjust if needed):
+    '  A: Account Name
+    '  C: Director
+    '  D: Estimated Participants
+    '  F: Total AUM (converted)
+    
+    For i = 2 To lastRowSales
+        ' Only count if there's a valid account name
+        If Trim(wsSales.Cells(i, "A").Value) <> "" Then
+            totalAllCount = totalAllCount + 1
+        End If
+        totalAllAUM = totalAllAUM + wsSales.Cells(i, "F").Value
+        totalAllParticipants = totalAllParticipants + wsSales.Cells(i, "D").Value
+    Next i
+    
+    '----- [4] PREPARE THINK-CELL AND POWERPOINT REFERENCES -----
+    Dim tcXlAddIn As Object
+    Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
+    
+    Dim ppApp As PowerPoint.Application
+    Set ppApp = New PowerPoint.Application
+    
+    '----- [5] STAGE LABELS (Adjust to your data) -----
+    Dim stageLabels As Variant
+    stageLabels = Array("Stage 1", "Stage 2", "Stage 3", "Stage 4")
+    
+    '----- [6] LOOP THROUGH EACH DIRECTOR AND CREATE A PPT -----
+    Dim director As Variant
+    For Each director In dictDirs.Keys
+        
+        '--- (a) Count deals by stage in "New Plan Pipeline" for chart ---
+        Dim countStages(1 To 4) As Long
+        
+        For i = 2 To lastRow
+            If Trim(wsPipeline.Cells(i, "B").Value) = director Then
+                Select Case Trim(wsPipeline.Cells(i, "E").Value)
+                    Case "Stage 1": countStages(1) = countStages(1) + 1
+                    Case "Stage 2": countStages(2) = countStages(2) + 1
+                    Case "Stage 3": countStages(3) = countStages(3) + 1
+                    Case "Stage 4": countStages(4) = countStages(4) + 1
+                End Select
+            End If
+        Next i
+        
+        '--- (b) Fill helper sheet for the think-cell chart, leaving col A blank ---
+        With wsHelper
+            ' Row 1: Stage labels
+            .Range("A1").Value = "" ' blank column
+            .Range("B1").Value = stageLabels(0)
+            .Range("C1").Value = stageLabels(1)
+            .Range("D1").Value = stageLabels(2)
+            .Range("E1").Value = stageLabels(3)
+            
+            ' Row 3: Counts
+            .Range("A3").Value = ""
+            .Range("B3").Value = countStages(1)
+            .Range("C3").Value = countStages(2)
+            .Range("D3").Value = countStages(3)
+            .Range("E3").Value = countStages(4)
+        End With
+        
+        '--- (c) Get director-specific totals from "New Plan Sales" ---
+        Dim directorCount As Long
+        Dim directorAUM As Double
+        Dim directorParticipants As Long
+        
+        For i = 2 To lastRowSales
+            If Trim(wsSales.Cells(i, "C").Value) = director Then
+                ' Count only if account name is not blank
+                If Trim(wsSales.Cells(i, "A").Value) <> "" Then
+                    directorCount = directorCount + 1
+                End If
+                directorAUM = directorAUM + wsSales.Cells(i, "F").Value
+                directorParticipants = directorParticipants + wsSales.Cells(i, "D").Value
+            End If
+        Next i
+        
+        '--- (d) Open the PowerPoint template invisibly ---
+        Dim pres As PowerPoint.Presentation
+        Set pres = ppApp.Presentations.Open( _
+            Filename:="C:\TemplateFolder\template1.pptx", _
+            WithWindow:=msoFalse)
+        
+        '--- (e) Update Chart1 on slide 2 ---
+        Dim rngData As Range
+        Set rngData = wsHelper.Range("A1:E3")
+        tcXlAddIn.UpdateChart pres.Slides(2), "Chart1", rngData, False
+        
+        '--- (f) Slide 1 text boxes for Director & Quarter ---
         Dim currentQuarter As String
         currentQuarter = "Q" & CStr(Int((Month(Date) - 1) / 3 + 1)) & " " & Year(Date)
         
-        ' Update slide 1 text boxes / placeholders
         With pres.Slides(1)
-            ' 1) Title placeholder (adjust as needed):
-            .Shapes.Title.TextFrame.TextRange.Text = director
-            ' 2) Next shape for the quarter (or adjust index/name):
-            .Shapes(2).TextFrame.TextRange.Text = currentQuarter
+            .Shapes("Title").TextFrame.TextRange.Text = director
+            .Shapes("Quarter").TextFrame.TextRange.Text = currentQuarter
         End With
+        
+        '--- (g) Slide 2 table "Table 5" (4x4) ---
+        ' Rows = 1..4, Columns = 1..4
+        Dim shpTable As PowerPoint.Shape
+        Set shpTable = pres.Slides(2).Shapes("Table 5")
+        
+        ' Row2: count of accounts, total count, percent
+        shpTable.Table.Cell(2, 2).Shape.TextFrame.TextRange.Text = CStr(directorCount)
+        shpTable.Table.Cell(2, 3).Shape.TextFrame.TextRange.Text = CStr(totalAllCount)
+        If totalAllCount > 0 Then
+            shpTable.Table.Cell(2, 4).Shape.TextFrame.TextRange.Text = _
+                Format(directorCount / totalAllCount, "0.0%")
+        Else
+            shpTable.Table.Cell(2, 4).Shape.TextFrame.TextRange.Text = "N/A"
+        End If
+        
+        ' Row3: total AUM, total AUM all directors, percent
+        shpTable.Table.Cell(3, 2).Shape.TextFrame.TextRange.Text = _
+            Format(directorAUM / 1E9, "$0.00") & "B"
+        shpTable.Table.Cell(3, 3).Shape.TextFrame.TextRange.Text = _
+            Format(totalAllAUM / 1E9, "$0.00") & "B"
+        If totalAllAUM > 0 Then
+            shpTable.Table.Cell(3, 4).Shape.TextFrame.TextRange.Text = _
+                Format(directorAUM / totalAllAUM, "0.0%")
+        Else
+            shpTable.Table.Cell(3, 4).Shape.TextFrame.TextRange.Text = "N/A"
+        End If
+        
+        ' Row4: participants, total participants, percent
+        shpTable.Table.Cell(4, 2).Shape.TextFrame.TextRange.Text = CStr(directorParticipants)
+        shpTable.Table.Cell(4, 3).Shape.TextFrame.TextRange.Text = CStr(totalAllParticipants)
+        If totalAllParticipants > 0 Then
+            shpTable.Table.Cell(4, 4).Shape.TextFrame.TextRange.Text = _
+                Format(directorParticipants / totalAllParticipants, "0.0%")
+        Else
+            shpTable.Table.Cell(4, 4).Shape.TextFrame.TextRange.Text = "N/A"
+        End If
+        
+        '--- (h) Save & Close this PPT ---
+        pres.SaveAs "C:\OutputPPTs\" & director & "_Pipeline.pptx"
+        pres.Close
+    Next director
+    
+    '----- [7] CLEAN UP -----
+    ppApp.Quit
+    MsgBox "All PowerPoints generated successfully."
+
+End Sub
