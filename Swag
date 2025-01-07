@@ -1,128 +1,81 @@
 Option Explicit
 
-Sub UpdateChartsForDirectors()
-
-    Dim wb As Workbook: Set wb = ThisWorkbook
-    Dim ws As Worksheet: Set ws = wb.Sheets("New Plan Pipeline") ' or "New Plan Sales"
+Sub GeneratePPTsPerDirector()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("New Plan Pipeline")
     
-    ' Identify last row
     Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
-    ' Range including headers
-    Dim rngAll As Range
-    Set rngAll = ws.Range("A1:E" & lastRow)
+    ' Collect unique directors from column B
+    Dim dictDirs As Object
+    Set dictDirs = CreateObject("Scripting.Dictionary")
     
-    ' Body range (data only)
-    Dim rngDataBody As Range
-    Set rngDataBody = ws.Range("A2:E" & lastRow)
-    
-    ' Collect unique directors (column B)
-    Dim dictDir As Object: Set dictDir = CreateObject("Scripting.Dictionary")
-    Dim cell As Range
-    For Each cell In ws.Range("B2:B" & lastRow)
-        If Not IsEmpty(cell.Value) Then
-            If Not dictDir.Exists(cell.Value) Then dictDir.Add cell.Value, True
+    Dim i As Long, dirName As String
+    For i = 2 To lastRow
+        dirName = Trim(ws.Cells(i, "B").Value)
+        If dirName <> "" Then
+            If Not dictDirs.Exists(dirName) Then dictDirs.Add dirName, dirName
         End If
-    Next cell
+    Next i
     
-    ' Initialize Think-Cell and PowerPoint (late binding)
+    ' Prepare references to think-cell and PowerPoint
     Dim tcXlAddIn As Object
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     
-    Dim ppApp As Object
-    Set ppApp = CreateObject("PowerPoint.Application")
+    Dim ppApp As PowerPoint.Application
+    Set ppApp = New PowerPoint.Application
     
-    ' Paths and chart name
-    Const templatePath       As String = "C:\Samples\UpdateChart\template.pptx"
-    Const saveFolder         As String = "C:\Samples\UpdateChart\"
-    Const thinkCellChartName As String = "Chart1"
+    ' We assume four stage labels below. Adapt as needed.
+    Dim stageLabels As Variant
+    stageLabels = Array("Stage 1", "Stage 2", "Stage 3", "Stage 4")
     
-    ' Define all five stages (adjust as needed)
-    Dim stages As Variant
-    stages = Array("Active Pursuit", "In Negotiation", "Closed Won", "Closed Lost", "No Decision")
-    
-    Dim dirName As Variant, rngFilter As Range
-    Dim pres As Object
-    
-    ' Loop through each Director
-    For Each dirName In dictDir.Keys
+    ' For each director, count deals by stage and update PPT
+    Dim director As Variant
+    For Each director In dictDirs.Keys
+        Dim countStages(1 To 4) As Long
         
-        ' Filter on Director (column B => Field=2)
-        ws.AutoFilterMode = False
-        rngAll.AutoFilter Field:=2, Criteria1:=dirName
-        
-        On Error Resume Next
-        Set rngFilter = rngDataBody.SpecialCells(xlCellTypeVisible)
-        On Error GoTo 0
-        
-        If Not rngFilter Is Nothing Then
-            
-            ' Remove old TempChartData if it exists
-            On Error Resume Next
-            Application.DisplayAlerts = False
-            If Not wb.Worksheets("TempChartData") Is Nothing Then
-                wb.Worksheets("TempChartData").Delete
+        ' Tally up each stage for this director
+        For i = 2 To lastRow
+            If Trim(ws.Cells(i, "B").Value) = director Then
+                Select Case Trim(ws.Cells(i, "E").Value)
+                    Case "Stage 1": countStages(1) = countStages(1) + 1
+                    Case "Stage 2": countStages(2) = countStages(2) + 1
+                    Case "Stage 3": countStages(3) = countStages(3) + 1
+                    Case "Stage 4": countStages(4) = countStages(4) + 1
+                End Select
             End If
-            Application.DisplayAlerts = True
-            On Error GoTo 0
-            
-            ' Create a temporary sheet to store chart data
-            Dim wsTemp As Worksheet
-            Set wsTemp = wb.Worksheets.Add
-            wsTemp.Name = "TempChartData"
-            
-            ' Dictionary to count Stage frequency
-            Dim dictStage As Object
-            Set dictStage = CreateObject("Scripting.Dictionary")
-            
-            Dim r As Range, stg As Variant
-            For Each r In rngFilter.Columns(5).Cells  ' 5th column = Stage
-                If Not IsEmpty(r.Value) Then
-                    stg = r.Value
-                    If dictStage.Exists(stg) Then
-                        dictStage(stg) = dictStage(stg) + 1
-                    Else
-                        dictStage.Add stg, 1
-                    End If
-                End If
-            Next r
-            
-            ' Place stages in row 1, their counts in row 3
-            Dim i As Long
-            For i = LBound(stages) To UBound(stages)
-                wsTemp.Cells(1, i + 2).Value = stages(i)        ' B1..F1
-                If dictStage.Exists(stages(i)) Then
-                    wsTemp.Cells(3, i + 2).Value = dictStage(stages(i)) ' B3..F3
-                Else
-                    wsTemp.Cells(3, i + 2).Value = 0
-                End If
-            Next i
-            
-            ' Define the chart range
-            Dim rngChart As Range
-            Set rngChart = wsTemp.Range(wsTemp.Cells(1, 2), wsTemp.Cells(3, UBound(stages) + 2))
-            
-            ' Open PowerPoint template (read-only)
-            Set pres = ppApp.Presentations.Open(FileName:=templatePath, _
-                                                ReadOnly:=msoTrue, _
-                                                Untitled:=msoTrue)
-            
-            ' Update Think-Cell chart
-            tcXlAddIn.UpdateChart pres, thinkCellChartName, rngChart, False
-            
-            ' Save presentation
-            pres.SaveAs saveFolder & dirName & "_updated.pptx"
-            pres.Close
-        End If
+        Next i
         
-        ws.AutoFilterMode = False
-        Set rngFilter = Nothing
-    Next dirName
+        ' Place the stage labels in B1:E1 and counts in B3:E3 on a helper sheet
+        With ThisWorkbook.Sheets("Helper")
+            .Range("B1").Value = stageLabels(0)
+            .Range("C1").Value = stageLabels(1)
+            .Range("D1").Value = stageLabels(2)
+            .Range("E1").Value = stageLabels(3)
+            
+            .Range("B3").Value = countStages(1)
+            .Range("C3").Value = countStages(2)
+            .Range("D3").Value = countStages(3)
+            .Range("E3").Value = countStages(4)
+        End With
+        
+        ' Open template invisibly
+        Dim pres As PowerPoint.Presentation
+        Set pres = ppApp.Presentations.Open( _
+            Filename:="C:\TemplateFolder\template1.pptx", _
+            WithWindow:=msoFalse)
+        
+        ' Update the chart on slide 2
+        Dim rngData As Range
+        Set rngData = ThisWorkbook.Sheets("Helper").Range("B1:E3")
+        tcXlAddIn.UpdateChart pres.Slides(2), "Chart1", rngData, False
+        
+        ' Save & close
+        pres.SaveAs "C:\OutputPPTs\" & director & "_Pipeline.pptx"
+        pres.Close
+    Next director
     
-    ' Close PowerPoint
     ppApp.Quit
-    
-    MsgBox "All Director-specific presentations have been created.", vbInformation
-
+    MsgBox "All PowerPoints generated successfully."
 End Sub
