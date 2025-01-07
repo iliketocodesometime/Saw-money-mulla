@@ -44,13 +44,11 @@ Sub GeneratePPTsPerDirector()
     Dim totalAllParticipants As Long
     
     ' Columns (adjust if needed):
-    '  A: Account Name
-    '  C: Director
-    '  D: Estimated Participants
-    '  F: Total AUM (converted)
-    
+    '   A: Account Name
+    '   C: Director
+    '   D: Estimated Participants
+    '   F: Total AUM (converted)
     For i = 2 To lastRowSales
-        ' Only count if there's a valid account name
         If Trim(wsSales.Cells(i, "A").Value) <> "" Then
             totalAllCount = totalAllCount + 1
         End If
@@ -65,32 +63,46 @@ Sub GeneratePPTsPerDirector()
     Dim ppApp As PowerPoint.Application
     Set ppApp = New PowerPoint.Application
     
-    '----- [5] STAGE LABELS (Adjust to your data) -----
+    '----- [5] STAGE LABELS -----
     Dim stageLabels As Variant
-    stageLabels = Array("Stage 1", "Stage 2", "Stage 3", "Stage 4")
+    stageLabels = Array( _
+        "Active Pursuit", _
+        "Shortlisted / Decision Pending", _
+        "Verbal Agreement", _
+        "Contract Negotiation" _
+    )
     
     '----- [6] LOOP THROUGH EACH DIRECTOR AND CREATE A PPT -----
     Dim director As Variant
     For Each director In dictDirs.Keys
         
-        '--- (a) Count deals by stage in "New Plan Pipeline" for chart ---
+        '--- (a) Reset the "New Plan Pipeline" stage counts for each Director ---
         Dim countStages(1 To 4) As Long
+        countStages(1) = 0
+        countStages(2) = 0
+        countStages(3) = 0
+        countStages(4) = 0
         
+        ' Count deals by stage in "New Plan Pipeline"
         For i = 2 To lastRow
             If Trim(wsPipeline.Cells(i, "B").Value) = director Then
                 Select Case Trim(wsPipeline.Cells(i, "E").Value)
-                    Case "Stage 1": countStages(1) = countStages(1) + 1
-                    Case "Stage 2": countStages(2) = countStages(2) + 1
-                    Case "Stage 3": countStages(3) = countStages(3) + 1
-                    Case "Stage 4": countStages(4) = countStages(4) + 1
+                    Case "Active Pursuit"
+                        countStages(1) = countStages(1) + 1
+                    Case "Shortlisted / Decision Pending"
+                        countStages(2) = countStages(2) + 1
+                    Case "Verbal Agreement"
+                        countStages(3) = countStages(3) + 1
+                    Case "Contract Negotiation"
+                        countStages(4) = countStages(4) + 1
                 End Select
             End If
         Next i
         
-        '--- (b) Fill helper sheet for the think-cell chart, leaving col A blank ---
+        ' Fill helper sheet for the think-cell chart, leaving col A blank
         With wsHelper
             ' Row 1: Stage labels
-            .Range("A1").Value = "" ' blank column
+            .Range("A1").Value = ""
             .Range("B1").Value = stageLabels(0)
             .Range("C1").Value = stageLabels(1)
             .Range("D1").Value = stageLabels(2)
@@ -104,14 +116,17 @@ Sub GeneratePPTsPerDirector()
             .Range("E3").Value = countStages(4)
         End With
         
-        '--- (c) Get director-specific totals from "New Plan Sales" ---
+        '--- (b) Reset and compute this Director’s "New Plan Sales" data ---
         Dim directorCount As Long
         Dim directorAUM As Double
         Dim directorParticipants As Long
         
+        directorCount = 0
+        directorAUM = 0
+        directorParticipants = 0
+        
         For i = 2 To lastRowSales
             If Trim(wsSales.Cells(i, "C").Value) = director Then
-                ' Count only if account name is not blank
                 If Trim(wsSales.Cells(i, "A").Value) <> "" Then
                     directorCount = directorCount + 1
                 End If
@@ -120,18 +135,18 @@ Sub GeneratePPTsPerDirector()
             End If
         Next i
         
-        '--- (d) Open the PowerPoint template invisibly ---
+        '--- (c) Open the PowerPoint template invisibly ---
         Dim pres As PowerPoint.Presentation
         Set pres = ppApp.Presentations.Open( _
             Filename:="C:\TemplateFolder\template1.pptx", _
             WithWindow:=msoFalse)
         
-        '--- (e) Update Chart1 on slide 2 ---
+        '--- (d) Update Chart1 on slide 2 ---
         Dim rngData As Range
         Set rngData = wsHelper.Range("A1:E3")
         tcXlAddIn.UpdateChart pres.Slides(2), "Chart1", rngData, False
         
-        '--- (f) Slide 1 text boxes for Director & Quarter ---
+        '--- (e) Slide 1 text boxes for Director & Quarter ---
         Dim currentQuarter As String
         currentQuarter = "Q" & CStr(Int((Month(Date) - 1) / 3 + 1)) & " " & Year(Date)
         
@@ -140,8 +155,7 @@ Sub GeneratePPTsPerDirector()
             .Shapes("Quarter").TextFrame.TextRange.Text = currentQuarter
         End With
         
-        '--- (g) Slide 2 table "Table 5" (4x4) ---
-        ' Rows = 1..4, Columns = 1..4
+        '--- (f) Slide 2 table "Table 5" (4x4) ---
         Dim shpTable As PowerPoint.Shape
         Set shpTable = pres.Slides(2).Shapes("Table 5")
         
@@ -177,7 +191,7 @@ Sub GeneratePPTsPerDirector()
             shpTable.Table.Cell(4, 4).Shape.TextFrame.TextRange.Text = "N/A"
         End If
         
-        '--- (h) Save & Close this PPT ---
+        '--- (g) Save & Close this PPT ---
         pres.SaveAs "C:\OutputPPTs\" & director & "_Pipeline.pptx"
         pres.Close
     Next director
