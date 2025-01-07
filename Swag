@@ -14,7 +14,7 @@ Sub GeneratePPTsPerDirector()
         Exit Sub
     End If
     
-    ' Create hidden "Helper" if it doesn't exist (for the Think-Cell chart data)
+    ' Create hidden "Helper" if it doesn't exist (for Think-Cell chart data)
     Dim wsHelper As Worksheet
     On Error Resume Next
     Set wsHelper = ThisWorkbook.Sheets("Helper")
@@ -25,7 +25,7 @@ Sub GeneratePPTsPerDirector()
         wsHelper.Visible = xlSheetHidden
     End If
     
-    '----- (2) Gather Directors from "New Plan Pipeline" (Column B) -----
+    '----- (2) Gather Directors from "New Plan Pipeline" (col B) -----
     Dim lastRow As Long
     lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, "A").End(xlUp).Row
     
@@ -67,7 +67,7 @@ Sub GeneratePPTsPerDirector()
     On Error Resume Next
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     On Error GoTo 0
-    ' If Think-Cell is not installed, tcXlAddIn will remain Nothing.
+    ' If Think-Cell is not installed, tcXlAddIn remains Nothing.
     
     Dim ppApp As PowerPoint.Application
     Set ppApp = New PowerPoint.Application
@@ -85,16 +85,16 @@ Sub GeneratePPTsPerDirector()
     Dim director As Variant
     For Each director In dictDirs.Keys
         
-        '=== (a) Reset arrays for the stage counts (Think-Cell Chart1) ===
+        '=== (a) Reset arrays for stage counts (Think-Cell Chart1) ===
         Dim countStages(1 To 4) As Long
         countStages(1) = 0: countStages(2) = 0
         countStages(3) = 0: countStages(4) = 0
         
-        '=== (b) Additional arrays for the slide 2 PowerPoint chart (Chart13) ===
+        '=== (b) Arrays for the PPT chart "Chart 13" ===
         Dim sumAUM(1 To 4) As Double
         Dim sumParticipants(1 To 4) As Long
         
-        '=== (c) Loop over "New Plan Pipeline" for this director ===
+        '=== (c) Loop over "New Plan Pipeline" for this Director ===
         For i = 2 To lastRow
             If Trim(wsPipeline.Cells(i, "B").Value) = director Then
                 Dim currentStage As String
@@ -124,18 +124,15 @@ Sub GeneratePPTsPerDirector()
             End If
         Next i
         
-        '=== (d) Fill the "Helper" sheet for Think-Cell "Chart1" (rows 1..3) ===
-        ' Skip if Think-Cell isn't available.
+        '=== (d) Fill "Helper" sheet for Think-Cell Chart1 (rows 1..3) ===
         If Not tcXlAddIn Is Nothing Then
             With wsHelper
-                ' Row 1: Stage labels
-                .Range("A1").Value = ""                  ' blank col A
+                .Range("A1").Value = ""
                 .Range("B1").Value = stageLabels(0)
                 .Range("C1").Value = stageLabels(1)
                 .Range("D1").Value = stageLabels(2)
                 .Range("E1").Value = stageLabels(3)
                 
-                ' Row 3: # in stage (counts)
                 .Range("A3").Value = ""
                 .Range("B3").Value = countStages(1)
                 .Range("C3").Value = countStages(2)
@@ -169,14 +166,14 @@ Sub GeneratePPTsPerDirector()
             Filename:="C:\TemplateFolder\template1.pptx", _
             WithWindow:=msoFalse)
         
-        '=== (g) Update Think-Cell Chart1 on slide 2 (if Think-Cell is installed) ===
+        '=== (g) Update Think-Cell Chart1 on slide 2 (if available) ===
         If Not tcXlAddIn Is Nothing Then
             Dim rngData As Range
             Set rngData = wsHelper.Range("A1:E3")
             tcXlAddIn.UpdateChart pres.Slides(2), "Chart1", rngData, False
         End If
         
-        '=== (h) Slide 1 text boxes: "Title" and "Quarter" ===
+        '=== (h) Slide 1 text boxes: "Title" & "Quarter" ===
         Dim currentQuarter As String
         currentQuarter = "Q" & CStr(Int((Month(Date) - 1) / 3 + 1)) & " " & Year(Date)
         
@@ -221,7 +218,7 @@ Sub GeneratePPTsPerDirector()
             shpTable.Table.Cell(4, 4).Shape.TextFrame.TextRange.Text = "N/A"
         End If
         
-        '=== (j) Slide 2 chart: "Chart 13" is a built-in PPT chart with an embedded workbook ===
+        '=== (j) Slide 2 "Chart 13" (PowerPoint chart with embedded workbook) ===
         Dim shpChart As PowerPoint.Shape
         On Error Resume Next
         Set shpChart = pres.Slides(2).Shapes("Chart 13")
@@ -239,17 +236,9 @@ Sub GeneratePPTsPerDirector()
                 Set wbChart = ppChart.ChartData.Workbook
                 
                 Dim wsChart As Excel.Worksheet
-                ' Typically it's the first worksheet, but confirm in your actual chart
-                Set wsChart = wbChart.Worksheets(1)
+                Set wsChart = wbChart.Worksheets(1) ' Adjust if needed
                 
-                ' Example layout: We'll place Stage, # in Stage, AUM, and Participants.
-                '  A1:D1 for headers
-                '  A2..A5 for stage names
-                '  B2..B5 for # in stage
-                '  C2..C5 for AUM
-                '  D2..D5 for participants
-                '  A6: "Grand Total", B6..D6 for sums
-                
+                ' Example layout: columns for Stage, # in Stage, AUM, Participants
                 wsChart.Range("A1:D1").Value = Array("Stage", "# in Stage", "Estimated AUM", "Est. Participants")
                 
                 ' Row 2: stage 1
@@ -282,12 +271,18 @@ Sub GeneratePPTsPerDirector()
                 wsChart.Range("C6").Formula = "=SUM(C2:C5)"
                 wsChart.Range("D6").Formula = "=SUM(D2:D5)"
                 
-                ' Refresh to ensure the chart updates
+                ' 1) Close the embedded workbook to ensure updates are saved
+                ppChart.ChartData.Workbook.Close True
+                
+                ' 2) Refresh the chart
                 ppChart.Refresh
+                
+                ' 3) Allow events to process
+                DoEvents
             End If
         End If
         
-        '=== (k) Save and close the presentation ===
+        '=== (k) Save & Close the presentation ===
         pres.SaveAs "C:\OutputPPTs\" & director & "_Pipeline.pptx"
         pres.Close
     Next director
