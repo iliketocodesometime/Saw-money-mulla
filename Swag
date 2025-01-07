@@ -1,1 +1,11 @@
-
+ ' Compute current quarter string (e.g., "Q1 2025")
+        Dim currentQuarter As String
+        currentQuarter = "Q" & CStr(Int((Month(Date) - 1) / 3 + 1)) & " " & Year(Date)
+        
+        ' Update slide 1 text boxes / placeholders
+        With pres.Slides(1)
+            ' 1) Title placeholder (adjust as needed):
+            .Shapes.Title.TextFrame.TextRange.Text = director
+            ' 2) Next shape for the quarter (or adjust index/name):
+            .Shapes(2).TextFrame.TextRange.Text = currentQuarter
+        End With
