@@ -1,1 +1,10 @@
-
+=ROWS(
+  UNIQUE(
+    FILTER(
+      'Upsell Pipeline'!$D:$D,
+      ( 'Upsell Pipeline'!$A:$A="Financial Reporting" ) *
+      ( 'Upsell Pipeline'!$B:$B="Active" ) *
+      ( 'Upsell Pipeline'!$C:$C="Home Office" )
+    )
+  )
+)
