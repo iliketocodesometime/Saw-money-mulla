@@ -1,14 +1,1 @@
-folder = dataiku.Folder("YOUR_FOLDER_ID")  # Replace with your folder ID
-patterns = ["Pattern1", "Pattern2", "Pattern3"]  # etc.
 
-# Pre-fetch modification times to avoid calling get_path_details repeatedly
-all_files = [(f, folder.get_path_details(f)["lastModified"]) 
-             for f in folder.list_paths_in_partition()]
-
-dfs = {}  # Dictionary to store dataframes keyed by pattern
-for pat in patterns:
-    matching_files = [(name, ts) for name, ts in all_files if name.startswith(pat)]
-    if matching_files:  # Only proceed if there's at least one match
-        latest_file = max(matching_files, key=lambda x: x[1])[0]
-        with folder.get_download_stream(latest_file) as stream:
-            dfs[pat] = pd.read_excel(stream)
