@@ -1,1 +1,18 @@
+import dataiku
+import pandas as pd
+import io
 
+folder = dataiku.Folder("YOUR_FOLDER_ID")
+patterns = ["Pattern1", "Pattern2"]
+
+all_files = [(f, folder.get_path_details(f)["lastModified"])
+             for f in folder.list_paths_in_partition()]
+
+dfs = {}
+for pat in patterns:
+    matching_files = [(name, ts) for (name, ts) in all_files if pat in name]
+    if matching_files:
+        latest_file = max(matching_files, key=lambda x: x[1])[0]
+        with folder.get_download_stream(latest_file) as stream:
+            data = stream.read()  # Read stream into memory
+        dfs[pat] = pd.read_excel(io.BytesIO(data))
