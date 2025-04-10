@@ -1,6 +1,1 @@
-folder = dataiku.Folder("YOUR_FOLDER_ID")  # Replace with your folder ID
-files = [f for f in folder.list_paths_in_partition() if f.startswith("Pattern")]
-latest_file = max(files, key=lambda f: folder.get_path_details(f)["lastModified"])
 
-with folder.get_download_stream(latest_file) as stream:
-    df = pd.read_excel(stream)
