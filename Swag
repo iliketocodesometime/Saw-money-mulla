@@ -7,7 +7,6 @@ Option Explicit
 Private Function FindColumnIndex(ws As Worksheet, ByVal headerName As String) As Long
     Dim lastCol As Long
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-    
     Dim c As Long
     For c = 1 To lastCol
         If Trim(UCase(ws.Cells(1, c).Value)) = UCase(headerName) Then
@@ -15,7 +14,6 @@ Private Function FindColumnIndex(ws As Worksheet, ByVal headerName As String) As
             Exit Function
         End If
     Next c
-    
     FindColumnIndex = 0
 End Function
 
@@ -67,7 +65,6 @@ End Function
 Private Function IsDirectorValid(ByVal dirStr As String) As Boolean
     Dim temp As String
     temp = Trim(dirStr)
-    
     If temp = "" Then
         IsDirectorValid = False
     ElseIf UCase(temp) = "HOME OFFICE" Then
@@ -85,7 +82,7 @@ End Function
 '----------------------------------------------------------------------------------
 Private Function BlankIfZero(ByVal numValue As Variant) As Variant
     If numValue = 0 Then
-        BlankIfZero = ""   ' Turn zero into blank
+        BlankIfZero = ""
     Else
         BlankIfZero = numValue
     End If
@@ -100,6 +97,7 @@ Sub GeneratePPTsPerDirector()
     Dim wsPipeline As Worksheet, wsSales As Worksheet
     Dim wsCrossSell As Worksheet, wsCrossSellPipe As Worksheet
     Dim wsUpsellClosed As Worksheet
+    Dim wsClientIndex As Worksheet
     
     On Error Resume Next
     Set wsPipeline = ThisWorkbook.Sheets("New Plan Pipeline")
@@ -107,6 +105,7 @@ Sub GeneratePPTsPerDirector()
     Set wsCrossSell = ThisWorkbook.Sheets("Cross Sell Closed Won")
     Set wsCrossSellPipe = ThisWorkbook.Sheets("Cross Sell Pipeline")
     Set wsUpsellClosed = ThisWorkbook.Sheets("Upsell Closed Won")
+    Set wsClientIndex = ThisWorkbook.Sheets("Client Index") ' <-- Added
     On Error GoTo 0
     
     If wsPipeline Is Nothing Or wsSales Is Nothing Or _
@@ -130,34 +129,38 @@ Sub GeneratePPTsPerDirector()
     End If
     
     '----- (1B) Find columns by header in each sheet -----
+    ' Pipeline
     Dim colDirPipeline As Long, colStagePipeline As Long
     Dim colAUMPipeline As Long, colPartPipeline As Long
     
     colDirPipeline = FindColumnIndex(wsPipeline, "Director")
     colStagePipeline = FindColumnIndex(wsPipeline, "Stage")
-    colAUMPipeline = FindColumnIndex(wsPipeline, "Estimated AUM")           ' Adjust as needed
-    colPartPipeline = FindColumnIndex(wsPipeline, "Estimated Participants") ' Adjust as needed
+    colAUMPipeline = FindColumnIndex(wsPipeline, "Estimated AUM")
+    colPartPipeline = FindColumnIndex(wsPipeline, "Estimated Participants")
     
     If colDirPipeline = 0 Or colStagePipeline = 0 Or colAUMPipeline = 0 Or colPartPipeline = 0 Then
         MsgBox "Could not find needed columns in 'New Plan Pipeline'."
         Exit Sub
     End If
-
+    
+    ' Sales
     Dim colAccSales As Long, colDirSales As Long
     Dim colPartSales As Long, colAUMSales As Long
     
     colAccSales = FindColumnIndex(wsSales, "Account Name")
     colDirSales = FindColumnIndex(wsSales, "Director")
     colPartSales = FindColumnIndex(wsSales, "Estimated Participants")
-    colAUMSales = FindColumnIndex(wsSales, "Total AUM (converted)") ' adjust if your header differs
+    colAUMSales = FindColumnIndex(wsSales, "Total AUM (converted)")
     
     If colAccSales = 0 Or colDirSales = 0 Or colPartSales = 0 Or colAUMSales = 0 Then
         MsgBox "Could not find needed columns in 'New Plan Sales'."
         Exit Sub
     End If
     
+    ' Cross-Sell (Closed Won)
     Dim colDirCSClosed As Long, colOppTypeCSClosed As Long
     Dim colStageCSClosed As Long
+    
     colDirCSClosed = FindColumnIndex(wsCrossSell, "Director")
     colOppTypeCSClosed = FindColumnIndex(wsCrossSell, "Opportunity Record Type")
     colStageCSClosed = FindColumnIndex(wsCrossSell, "Stage")
@@ -167,8 +170,10 @@ Sub GeneratePPTsPerDirector()
         Exit Sub
     End If
     
+    ' Cross-Sell Pipeline
     Dim colDirCSPipe As Long, colOppTypeCSPipe As Long
     Dim colStageCSPipe As Long
+    
     colDirCSPipe = FindColumnIndex(wsCrossSellPipe, "Director")
     colOppTypeCSPipe = FindColumnIndex(wsCrossSellPipe, "Opportunity Record Type")
     colStageCSPipe = FindColumnIndex(wsCrossSellPipe, "Stage")
@@ -178,6 +183,7 @@ Sub GeneratePPTsPerDirector()
         Exit Sub
     End If
     
+    ' Upsell (Closed Won)
     Dim colDirUpsell As Long, colLineUpsell As Long, colStageUpsell As Long
     If upsellAvailable Then
         colDirUpsell = FindColumnIndex(wsUpsellClosed, "Director")
@@ -190,27 +196,39 @@ Sub GeneratePPTsPerDirector()
         End If
     End If
     
-    '----- (2) Gather Directors from "New Plan Pipeline" row 2..lastRow-----
-    Dim lastRow As Long
-    lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, 1).End(xlUp).Row
-    
+    '----- (2) Gather Directors from "New Plan Pipeline" and "Client Index" -----
     Dim dictDirs As Object
     Set dictDirs = CreateObject("Scripting.Dictionary")
     
-    Dim i As Long
-    Dim cellVal As Variant
+    Dim lastRow As Long, i As Long, cellVal As Variant
     
+    ' From New Plan Pipeline
+    lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, 1).End(xlUp).Row
     For i = 2 To lastRow
         If Not IsError(wsPipeline.Cells(i, colDirPipeline).Value) Then
             cellVal = Trim(wsPipeline.Cells(i, colDirPipeline).Value)
-            ' Only add if "valid" (not blank, not Home Office, not "-")
             If IsDirectorValid(cellVal) Then
-                If Not dictDirs.Exists(cellVal) Then
-                    dictDirs.Add cellVal, cellVal
-                End If
+                If Not dictDirs.Exists(cellVal) Then dictDirs.Add cellVal, cellVal
             End If
         End If
     Next i
+    
+    ' From Client Index (if present)
+    If Not wsClientIndex Is Nothing Then
+        Dim colDirClientIndex As Long
+        colDirClientIndex = FindColumnIndex(wsClientIndex, "Director")
+        If colDirClientIndex > 0 Then
+            lastRow = wsClientIndex.Cells(wsClientIndex.Rows.Count, 1).End(xlUp).Row
+            For i = 2 To lastRow
+                If Not IsError(wsClientIndex.Cells(i, colDirClientIndex).Value) Then
+                    cellVal = Trim(wsClientIndex.Cells(i, colDirClientIndex).Value)
+                    If IsDirectorValid(cellVal) Then
+                        If Not dictDirs.Exists(cellVal) Then dictDirs.Add cellVal, cellVal
+                    End If
+                End If
+            Next i
+        End If
+    End If
     
     '----- (3) Pre-compute totals (across all directors) from "New Plan Sales" -----
     Dim lastRowSales As Long
@@ -221,25 +239,20 @@ Sub GeneratePPTsPerDirector()
     Dim totalAllParticipants As Long
     
     For i = 2 To lastRowSales
-        ' Check if the row is valid: no error, Director is valid
         Dim thisDirSales As Variant
         thisDirSales = wsSales.Cells(i, colDirSales).Value
         If Not IsError(thisDirSales) Then
             Dim dirS As String
             dirS = Trim(thisDirSales)
-            ' If director is blank, "Home Office", or "-", skip
             If IsDirectorValid(dirS) Then
-                ' If account name not error
                 If Not IsError(wsSales.Cells(i, colAccSales).Value) Then
                     If Trim(wsSales.Cells(i, colAccSales).Value) <> "" Then
                         totalAllCount = totalAllCount + 1
                     End If
                 End If
-                ' AUM
                 If Not IsError(wsSales.Cells(i, colAUMSales).Value) Then
                     totalAllAUM = totalAllAUM + wsSales.Cells(i, colAUMSales).Value
                 End If
-                ' Participants
                 If Not IsError(wsSales.Cells(i, colPartSales).Value) Then
                     totalAllParticipants = totalAllParticipants + wsSales.Cells(i, colPartSales).Value
                 End If
@@ -247,7 +260,7 @@ Sub GeneratePPTsPerDirector()
         End If
     Next i
     
-    '----- (3B) Pre-compute Cross-Sell CLOSED WON totals (all directors) -----
+    '----- (3B) Cross-Sell CLOSED WON totals (all directors) -----
     Dim lastRowCross As Long
     lastRowCross = wsCrossSell.Cells(wsCrossSell.Rows.Count, 1).End(xlUp).Row
     
@@ -259,13 +272,11 @@ Sub GeneratePPTsPerDirector()
         "Non-Qualified Deferred Compensation Opportunity", _
         "Retirement Opportunity" _
     )
-    
     Dim totalCrossSellCounts(1 To 5) As Long
     
     For i = 2 To lastRowCross
         If Not IsError(wsCrossSell.Cells(i, colStageCSClosed).Value) Then
             If Trim(wsCrossSell.Cells(i, colStageCSClosed).Value) = "Closed Won" Then
-                ' Check director validity
                 Dim dirCS As Variant
                 dirCS = wsCrossSell.Cells(i, colDirCSClosed).Value
                 If Not IsError(dirCS) Then
@@ -275,7 +286,6 @@ Sub GeneratePPTsPerDirector()
                         If Not IsError(wsCrossSell.Cells(i, colOppTypeCSClosed).Value) Then
                             Dim thisOppType As String
                             thisOppType = Trim(wsCrossSell.Cells(i, colOppTypeCSClosed).Value)
-                            
                             Dim idx As Long
                             idx = MatchOppTypeIndex(thisOppType, arrOppTypes)
                             If idx > 0 Then
@@ -288,7 +298,7 @@ Sub GeneratePPTsPerDirector()
         End If
     Next i
     
-    '----- (3C) Pre-compute Upsell CLOSED WON totals (all directors) -----
+    '----- (3C) Upsell CLOSED WON totals (all directors) -----
     Dim arrGAS As Variant
     arrGAS = Array("Advanced Solutions", "Financial Reporting", "Global Intelligence")
     
@@ -296,11 +306,9 @@ Sub GeneratePPTsPerDirector()
     Dim lastRowUpsell As Long
     If upsellAvailable Then
         lastRowUpsell = wsUpsellClosed.Cells(wsUpsellClosed.Rows.Count, 1).End(xlUp).Row
-        
         For i = 2 To lastRowUpsell
             If Not IsError(wsUpsellClosed.Cells(i, colStageUpsell).Value) Then
                 If Trim(wsUpsellClosed.Cells(i, colStageUpsell).Value) = "Closed Won" Then
-                    ' Check director validity
                     Dim dirUpsell As Variant
                     dirUpsell = wsUpsellClosed.Cells(i, colDirUpsell).Value
                     If Not IsError(dirUpsell) Then
@@ -310,7 +318,6 @@ Sub GeneratePPTsPerDirector()
                             If Not IsError(wsUpsellClosed.Cells(i, colLineUpsell).Value) Then
                                 Dim busLine As String
                                 busLine = Trim(wsUpsellClosed.Cells(i, colLineUpsell).Value)
-                                
                                 Dim lineIdx As Long
                                 lineIdx = MatchGASIndex(busLine, arrGAS)
                                 If lineIdx > 0 Then
@@ -324,7 +331,7 @@ Sub GeneratePPTsPerDirector()
         Next i
     End If
     
-    '----- (4) Prepare references to Think-Cell (if installed) & PowerPoint -----
+    '----- (4) Prepare references to Think-Cell & PowerPoint -----
     Dim tcXlAddIn As Object
     On Error Resume Next
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
@@ -333,14 +340,9 @@ Sub GeneratePPTsPerDirector()
     Dim ppApp As PowerPoint.Application
     Set ppApp = New PowerPoint.Application
     
-    '----- (5) Define your stage labels for pipeline -----
+    '----- (5) Define stage labels for pipeline -----
     Dim stageLabels As Variant
-    stageLabels = Array( _
-        "Active Pursuit", _
-        "Shortlisted / Decision Pending", _
-        "Verbal Agreement", _
-        "Contract Negotiation" _
-    )
+    stageLabels = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
     
     '----- (6) For each Director, generate a PPT -----
     Dim director As Variant
@@ -362,59 +364,53 @@ Sub GeneratePPTsPerDirector()
         Dim lastRowPipe As Long
         lastRowPipe = wsPipeline.Cells(wsPipeline.Rows.Count, 1).End(xlUp).Row
         
-        For i = 2 To lastRowPipe
-            If Not IsError(wsPipeline.Cells(i, colDirPipeline).Value) Then
+        Dim iRow As Long
+        For iRow = 2 To lastRowPipe
+            If Not IsError(wsPipeline.Cells(iRow, colDirPipeline).Value) Then
                 Dim dVal As String
-                dVal = Trim(wsPipeline.Cells(i, colDirPipeline).Value)
-                
-                ' Must match the current 'director' AND pass the filter of IsDirectorValid
+                dVal = Trim(wsPipeline.Cells(iRow, colDirPipeline).Value)
                 If dVal = director And IsDirectorValid(dVal) Then
-                    ' Check stage
-                    If Not IsError(wsPipeline.Cells(i, colStagePipeline).Value) Then
+                    If Not IsError(wsPipeline.Cells(iRow, colStagePipeline).Value) Then
                         Dim currentStage As String
-                        currentStage = Trim(wsPipeline.Cells(i, colStagePipeline).Value)
-                        
+                        currentStage = Trim(wsPipeline.Cells(iRow, colStagePipeline).Value)
                         Select Case currentStage
                             Case "Active Pursuit"
                                 countStages(1) = countStages(1) + 1
-                                If Not IsError(wsPipeline.Cells(i, colAUMPipeline).Value) Then
-                                    sumAUM(1) = sumAUM(1) + wsPipeline.Cells(i, colAUMPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colAUMPipeline).Value) Then
+                                    sumAUM(1) = sumAUM(1) + wsPipeline.Cells(iRow, colAUMPipeline).Value
                                 End If
-                                If Not IsError(wsPipeline.Cells(i, colPartPipeline).Value) Then
-                                    sumParticipants(1) = sumParticipants(1) + wsPipeline.Cells(i, colPartPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colPartPipeline).Value) Then
+                                    sumParticipants(1) = sumParticipants(1) + wsPipeline.Cells(iRow, colPartPipeline).Value
                                 End If
-                            
                             Case "Shortlisted / Decision Pending"
                                 countStages(2) = countStages(2) + 1
-                                If Not IsError(wsPipeline.Cells(i, colAUMPipeline).Value) Then
-                                    sumAUM(2) = sumAUM(2) + wsPipeline.Cells(i, colAUMPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colAUMPipeline).Value) Then
+                                    sumAUM(2) = sumAUM(2) + wsPipeline.Cells(iRow, colAUMPipeline).Value
                                 End If
-                                If Not IsError(wsPipeline.Cells(i, colPartPipeline).Value) Then
-                                    sumParticipants(2) = sumParticipants(2) + wsPipeline.Cells(i, colPartPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colPartPipeline).Value) Then
+                                    sumParticipants(2) = sumParticipants(2) + wsPipeline.Cells(iRow, colPartPipeline).Value
                                 End If
-                            
                             Case "Verbal Agreement"
                                 countStages(3) = countStages(3) + 1
-                                If Not IsError(wsPipeline.Cells(i, colAUMPipeline).Value) Then
-                                    sumAUM(3) = sumAUM(3) + wsPipeline.Cells(i, colAUMPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colAUMPipeline).Value) Then
+                                    sumAUM(3) = sumAUM(3) + wsPipeline.Cells(iRow, colAUMPipeline).Value
                                 End If
-                                If Not IsError(wsPipeline.Cells(i, colPartPipeline).Value) Then
-                                    sumParticipants(3) = sumParticipants(3) + wsPipeline.Cells(i, colPartPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colPartPipeline).Value) Then
+                                    sumParticipants(3) = sumParticipants(3) + wsPipeline.Cells(iRow, colPartPipeline).Value
                                 End If
-                            
                             Case "Contract Negotiation"
                                 countStages(4) = countStages(4) + 1
-                                If Not IsError(wsPipeline.Cells(i, colAUMPipeline).Value) Then
-                                    sumAUM(4) = sumAUM(4) + wsPipeline.Cells(i, colAUMPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colAUMPipeline).Value) Then
+                                    sumAUM(4) = sumAUM(4) + wsPipeline.Cells(iRow, colAUMPipeline).Value
                                 End If
-                                If Not IsError(wsPipeline.Cells(i, colPartPipeline).Value) Then
-                                    sumParticipants(4) = sumParticipants(4) + wsPipeline.Cells(i, colPartPipeline).Value
+                                If Not IsError(wsPipeline.Cells(iRow, colPartPipeline).Value) Then
+                                    sumParticipants(4) = sumParticipants(4) + wsPipeline.Cells(iRow, colPartPipeline).Value
                                 End If
                         End Select
                     End If
                 End If
             End If
-        Next i
+        Next iRow
         
         '=== (c) Fill "Helper" for Slide 2 "Chart1" (Think-Cell) ===
         If Not tcXlAddIn Is Nothing Then
@@ -425,7 +421,6 @@ Sub GeneratePPTsPerDirector()
                 .Range("D1").Value = stageLabels(2)
                 .Range("E1").Value = stageLabels(3)
                 
-                ' For chart: replace 0 with blank
                 .Range("A3").Value = ""
                 .Range("B3").Value = BlankIfZero(countStages(1))
                 .Range("C3").Value = BlankIfZero(countStages(2))
@@ -443,28 +438,25 @@ Sub GeneratePPTsPerDirector()
         directorAUM = 0
         directorParticipants = 0
         
-        For i = 2 To lastRowSales
-            If Not IsError(wsSales.Cells(i, colDirSales).Value) Then
+        For iRow = 2 To lastRowSales
+            If Not IsError(wsSales.Cells(iRow, colDirSales).Value) Then
                 Dim dValS As String
-                dValS = Trim(wsSales.Cells(i, colDirSales).Value)
+                dValS = Trim(wsSales.Cells(iRow, colDirSales).Value)
                 If dValS = director And IsDirectorValid(dValS) Then
-                    ' If Account Name not blank => increment
-                    If Not IsError(wsSales.Cells(i, colAccSales).Value) Then
-                        If Trim(wsSales.Cells(i, colAccSales).Value) <> "" Then
+                    If Not IsError(wsSales.Cells(iRow, colAccSales).Value) Then
+                        If Trim(wsSales.Cells(iRow, colAccSales).Value) <> "" Then
                             directorCount = directorCount + 1
                         End If
                     End If
-                    ' AUM
-                    If Not IsError(wsSales.Cells(i, colAUMSales).Value) Then
-                        directorAUM = directorAUM + wsSales.Cells(i, colAUMSales).Value
+                    If Not IsError(wsSales.Cells(iRow, colAUMSales).Value) Then
+                        directorAUM = directorAUM + wsSales.Cells(iRow, colAUMSales).Value
                     End If
-                    ' Participants
-                    If Not IsError(wsSales.Cells(i, colPartSales).Value) Then
-                        directorParticipants = directorParticipants + wsSales.Cells(i, colPartSales).Value
+                    If Not IsError(wsSales.Cells(iRow, colPartSales).Value) Then
+                        directorParticipants = directorParticipants + wsSales.Cells(iRow, colPartSales).Value
                     End If
                 End If
             End If
-        Next i
+        Next iRow
         
         '=== (e) Open the PowerPoint template invisibly ===
         Dim pres As PowerPoint.Presentation
@@ -492,7 +484,6 @@ Sub GeneratePPTsPerDirector()
         Dim shpTable As PowerPoint.Shape
         Set shpTable = pres.Slides(2).Shapes("Table 5")
         
-        ' Row2: # of accounts, total #, percent
         shpTable.Table.Cell(2, 2).Shape.TextFrame.TextRange.Text = CStr(directorCount)
         shpTable.Table.Cell(2, 3).Shape.TextFrame.TextRange.Text = CStr(totalAllCount)
         If totalAllCount > 0 Then
@@ -502,7 +493,6 @@ Sub GeneratePPTsPerDirector()
             shpTable.Table.Cell(2, 4).Shape.TextFrame.TextRange.Text = "N/A"
         End If
         
-        ' Row3: total AUM (director vs. all), percent
         shpTable.Table.Cell(3, 2).Shape.TextFrame.TextRange.Text = _
             Format(directorAUM / 1E9, "$0.00") & "B"
         shpTable.Table.Cell(3, 3).Shape.TextFrame.TextRange.Text = _
@@ -514,7 +504,6 @@ Sub GeneratePPTsPerDirector()
             shpTable.Table.Cell(3, 4).Shape.TextFrame.TextRange.Text = "N/A"
         End If
         
-        ' Row4: participants (director vs. all), percent
         shpTable.Table.Cell(4, 2).Shape.TextFrame.TextRange.Text = CStr(directorParticipants)
         shpTable.Table.Cell(4, 3).Shape.TextFrame.TextRange.Text = CStr(totalAllParticipants)
         If totalAllParticipants > 0 Then
@@ -541,7 +530,6 @@ Sub GeneratePPTsPerDirector()
                 Dim wsChart As Excel.Worksheet
                 Set wsChart = wbChart.Worksheets(1)
                 
-                ' For "Chart 13", also put blank if zero
                 wsChart.Range("A1:D1").Value = Array("Stage", "# in Stage", "Estimated AUM", "Est. Participants")
                 
                 wsChart.Range("A2").Value = stageLabels(0)
@@ -582,19 +570,16 @@ Sub GeneratePPTsPerDirector()
             dirCrossSellCounts(jType) = 0
         Next jType
         
-        Dim lastRowCrossPipe As Long
-        For i = 2 To lastRowCross
-            If Not IsError(wsCrossSell.Cells(i, colStageCSClosed).Value) Then
-                If Trim(wsCrossSell.Cells(i, colStageCSClosed).Value) = "Closed Won" Then
-                    ' Check director
-                    If Not IsError(wsCrossSell.Cells(i, colDirCSClosed).Value) Then
+        For iRow = 2 To lastRowCross
+            If Not IsError(wsCrossSell.Cells(iRow, colStageCSClosed).Value) Then
+                If Trim(wsCrossSell.Cells(iRow, colStageCSClosed).Value) = "Closed Won" Then
+                    If Not IsError(wsCrossSell.Cells(iRow, colDirCSClosed).Value) Then
                         Dim dValCS As String
-                        dValCS = Trim(wsCrossSell.Cells(i, colDirCSClosed).Value)
+                        dValCS = Trim(wsCrossSell.Cells(iRow, colDirCSClosed).Value)
                         If dValCS = director And IsDirectorValid(dValCS) Then
-                            If Not IsError(wsCrossSell.Cells(i, colOppTypeCSClosed).Value) Then
+                            If Not IsError(wsCrossSell.Cells(iRow, colOppTypeCSClosed).Value) Then
                                 Dim oppType As String
-                                oppType = Trim(wsCrossSell.Cells(i, colOppTypeCSClosed).Value)
-                                
+                                oppType = Trim(wsCrossSell.Cells(iRow, colOppTypeCSClosed).Value)
                                 Dim oppIdx As Long
                                 oppIdx = MatchOppTypeIndex(oppType, arrOppTypes)
                                 If oppIdx > 0 Then
@@ -605,7 +590,7 @@ Sub GeneratePPTsPerDirector()
                     End If
                 End If
             End If
-        Next i
+        Next iRow
         
         Dim shpTable3 As PowerPoint.Shape
         On Error Resume Next
@@ -615,23 +600,15 @@ Sub GeneratePPTsPerDirector()
         If Not shpTable3 Is Nothing Then
             With shpTable3.Table
                 Dim col As Long
-                
-                ' Row 1, columns 2..6: Opp Types
                 For col = 1 To 5
                     .Cell(1, col + 1).Shape.TextFrame.TextRange.Text = arrOppTypes(col - 1)
                 Next col
-                
-                ' Row 2, columns 2..6: totalCrossSellCounts
                 For col = 1 To 5
                     .Cell(2, col + 1).Shape.TextFrame.TextRange.Text = CStr(totalCrossSellCounts(col))
                 Next col
-                
-                ' Row 3, columns 2..6: dirCrossSellCounts
                 For col = 1 To 5
                     .Cell(3, col + 1).Shape.TextFrame.TextRange.Text = CStr(dirCrossSellCounts(col))
                 Next col
-                
-                ' Row 4, columns 2..6: % of channel
                 For col = 1 To 5
                     If totalCrossSellCounts(col) > 0 Then
                         .Cell(4, col + 1).Shape.TextFrame.TextRange.Text = _
@@ -643,31 +620,30 @@ Sub GeneratePPTsPerDirector()
             End With
         End If
         
-        '=== (k) Also on Slide 3: Think-Cell "CrossSellPipeline" chart ===
+        '=== (k) Slide 3: Think-Cell "CrossSellPipeline" chart ===
         If Not tcXlAddIn Is Nothing Then
             Dim lastRowCrossPipe2 As Long
             lastRowCrossPipe2 = wsCrossSellPipe.Cells(wsCrossSellPipe.Rows.Count, 1).End(xlUp).Row
             
             Dim crossSellPipe(1 To 4, 1 To 5) As Long
             Dim r As Long, c As Long
-            
             For r = 1 To 4
                 For c = 1 To 5
                     crossSellPipe(r, c) = 0
                 Next c
             Next r
             
-            For i = 2 To lastRowCrossPipe2
-                If Not IsError(wsCrossSellPipe.Cells(i, colDirCSPipe).Value) Then
+            For iRow = 2 To lastRowCrossPipe2
+                If Not IsError(wsCrossSellPipe.Cells(iRow, colDirCSPipe).Value) Then
                     Dim dValPipe As String
-                    dValPipe = Trim(wsCrossSellPipe.Cells(i, colDirCSPipe).Value)
+                    dValPipe = Trim(wsCrossSellPipe.Cells(iRow, colDirCSPipe).Value)
                     If dValPipe = director And IsDirectorValid(dValPipe) Then
-                        If Not IsError(wsCrossSellPipe.Cells(i, colStageCSPipe).Value) And _
-                           Not IsError(wsCrossSellPipe.Cells(i, colOppTypeCSPipe).Value) Then
+                        If Not IsError(wsCrossSellPipe.Cells(iRow, colStageCSPipe).Value) And _
+                           Not IsError(wsCrossSellPipe.Cells(iRow, colOppTypeCSPipe).Value) Then
                             Dim pipeStage As String
-                            pipeStage = Trim(wsCrossSellPipe.Cells(i, colStageCSPipe).Value)
+                            pipeStage = Trim(wsCrossSellPipe.Cells(iRow, colStageCSPipe).Value)
                             Dim pipeOppType As String
-                            pipeOppType = Trim(wsCrossSellPipe.Cells(i, colOppTypeCSPipe).Value)
+                            pipeOppType = Trim(wsCrossSellPipe.Cells(iRow, colOppTypeCSPipe).Value)
                             
                             Dim typeIdx As Long, stageIdx As Long
                             typeIdx = MatchOppTypeIndex(pipeOppType, arrOppTypes)
@@ -678,13 +654,11 @@ Sub GeneratePPTsPerDirector()
                         End If
                     End If
                 End If
-            Next i
+            Next iRow
             
             With wsHelper
                 .Range("A1:F10").ClearContents
                 .Range("A1").Value = "Cross-Sell Pipeline Data"
-                .Range("A2:F2").ClearContents
-                
                 .Range("B1").Value = "Charitable Giving"
                 .Range("C1").Value = "Corporate Cash"
                 .Range("D1").Value = "Inst Consulting"
@@ -696,7 +670,6 @@ Sub GeneratePPTsPerDirector()
                 .Range("A5").Value = stageLabels(2)
                 .Range("A6").Value = stageLabels(3)
                 
-                ' For CrossSellPipeline chart: replace 0 with blank
                 Dim rr As Long, cc As Long
                 For rr = 1 To 4
                     For cc = 1 To 5
@@ -718,16 +691,16 @@ Sub GeneratePPTsPerDirector()
                 directorUpsellCounts(kLine) = 0
             Next kLine
             
-            For i = 2 To lastRowUpsell
-                If Not IsError(wsUpsellClosed.Cells(i, colStageUpsell).Value) Then
-                    If Trim(wsUpsellClosed.Cells(i, colStageUpsell).Value) = "Closed Won" Then
-                        If Not IsError(wsUpsellClosed.Cells(i, colDirUpsell).Value) Then
+            For iRow = 2 To lastRowUpsell
+                If Not IsError(wsUpsellClosed.Cells(iRow, colStageUpsell).Value) Then
+                    If Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value) = "Closed Won" Then
+                        If Not IsError(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) Then
                             Dim dValU As String
-                            dValU = Trim(wsUpsellClosed.Cells(i, colDirUpsell).Value)
+                            dValU = Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value)
                             If dValU = director And IsDirectorValid(dValU) Then
-                                If Not IsError(wsUpsellClosed.Cells(i, colLineUpsell).Value) Then
+                                If Not IsError(wsUpsellClosed.Cells(iRow, colLineUpsell).Value) Then
                                     Dim thisLine As String
-                                    thisLine = Trim(wsUpsellClosed.Cells(i, colLineUpsell).Value)
+                                    thisLine = Trim(wsUpsellClosed.Cells(iRow, colLineUpsell).Value)
                                     Dim thisIdx As Long
                                     thisIdx = MatchGASIndex(thisLine, arrGAS)
                                     If thisIdx > 0 Then
@@ -738,7 +711,7 @@ Sub GeneratePPTsPerDirector()
                         End If
                     End If
                 End If
-            Next i
+            Next iRow
             
             Dim shpUpsell As PowerPoint.Shape
             On Error Resume Next
@@ -747,7 +720,6 @@ Sub GeneratePPTsPerDirector()
             
             If Not shpUpsell Is Nothing Then
                 With shpUpsell.Table
-                    ' Row1, Cols2..4
                     .Cell(1, 2).Shape.TextFrame.TextRange.Text = arrGAS(0)
                     .Cell(1, 3).Shape.TextFrame.TextRange.Text = arrGAS(1)
                     .Cell(1, 4).Shape.TextFrame.TextRange.Text = arrGAS(2)
@@ -760,7 +732,6 @@ Sub GeneratePPTsPerDirector()
                     .Cell(3, 3).Shape.TextFrame.TextRange.Text = CStr(directorUpsellCounts(2))
                     .Cell(3, 4).Shape.TextFrame.TextRange.Text = CStr(directorUpsellCounts(3))
                     
-                    ' Row4: % of channel
                     Dim colX As Long
                     For colX = 1 To 3
                         If totalUpsellCounts(colX) > 0 Then
@@ -782,6 +753,4 @@ Sub GeneratePPTsPerDirector()
     '----- (7) Cleanup -----
     ppApp.Quit
     MsgBox "All PowerPoints generated successfully!"
-
 End Sub
-
