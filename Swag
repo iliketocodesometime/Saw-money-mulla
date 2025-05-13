@@ -1,45 +1,58 @@
-'=== (l3) Slide 4: Education Events Table ===
-Dim wsEduEvents As Worksheet
+'=== (l4) Slide 4: Workplace Banking Table ===
+Dim wsWorkplace As Worksheet
 On Error Resume Next
-Set wsEduEvents = ThisWorkbook.Sheets("Education Events")
+Set wsWorkplace = ThisWorkbook.Sheets("Workplace Banking Closed Won")
 On Error GoTo 0
 
-If Not wsEduEvents Is Nothing Then
-    Dim colDirEdu As Long
-    colDirEdu = FindColumnIndex(wsEduEvents, "Director")
-    
-    If colDirEdu > 0 Then
-        Dim lastRowEdu As Long
-        lastRowEdu = wsEduEvents.Cells(wsEduEvents.Rows.Count, colDirEdu).End(xlUp).Row
-        
-        Dim totalEduCount As Long: totalEduCount = 0
-        Dim directorEduCount As Long: directorEduCount = 0
+If Not wsWorkplace Is Nothing Then
+    Dim colDirWB As Long, colPartWB As Long
+    colDirWB = FindColumnIndex(wsWorkplace, "Director")
+    colPartWB = FindColumnIndex(wsWorkplace, "# US Participants")
 
-        For iRow = 2 To lastRowEdu
-            Dim dirVal As String
-            dirVal = Trim(wsEduEvents.Cells(iRow, colDirEdu).Value)
-            If IsDirectorValid(dirVal) Then
-                totalEduCount = totalEduCount + 1
-                If dirVal = director Then
-                    directorEduCount = directorEduCount + 1
+    If colDirWB > 0 And colPartWB > 0 Then
+        Dim lastRowWB As Long
+        lastRowWB = wsWorkplace.Cells(wsWorkplace.Rows.Count, colDirWB).End(xlUp).Row
+
+        Dim totalParticipantsWB As Long: totalParticipantsWB = 0
+        Dim totalClientsWB As Long: totalClientsWB = 0
+        Dim dirParticipantsWB As Long: dirParticipantsWB = 0
+        Dim dirClientsWB As Long: dirClientsWB = 0
+
+        For iRow = 2 To lastRowWB
+            Dim dirWB As String
+            dirWB = Trim(wsWorkplace.Cells(iRow, colDirWB).Value)
+            If IsDirectorValid(dirWB) Then
+                totalClientsWB = totalClientsWB + 1
+                If IsNumeric(wsWorkplace.Cells(iRow, colPartWB).Value) Then
+                    totalParticipantsWB = totalParticipantsWB + wsWorkplace.Cells(iRow, colPartWB).Value
+                End If
+                
+                If dirWB = director Then
+                    dirClientsWB = dirClientsWB + 1
+                    If IsNumeric(wsWorkplace.Cells(iRow, colPartWB).Value) Then
+                        dirParticipantsWB = dirParticipantsWB + wsWorkplace.Cells(iRow, colPartWB).Value
+                    End If
                 End If
             End If
         Next iRow
 
-        Dim shpEdu As PowerPoint.Shape
+        Dim shpDeep As PowerPoint.Shape
         On Error Resume Next
-        Set shpEdu = pres.Slides(4).Shapes("TableEducation")
+        Set shpDeep = pres.Slides(4).Shapes("TableDeep")
         On Error GoTo 0
 
-        If Not shpEdu Is Nothing Then
-            With shpEdu.Table
-                .Cell(1, 2).Shape.TextFrame.TextRange.Text = "Education Events"
-                .Cell(2, 2).Shape.TextFrame.TextRange.Text = CStr(totalEduCount)
-                .Cell(3, 2).Shape.TextFrame.TextRange.Text = CStr(directorEduCount)
-                If totalEduCount > 0 Then
-                    .Cell(4, 2).Shape.TextFrame.TextRange.Text = Format(directorEduCount / totalEduCount, "0.0%")
+        If Not shpDeep Is Nothing Then
+            With shpDeep.Table
+                .Cell(1, 3).Shape.TextFrame.TextRange.Text = "Workplace Banking"
+                .Cell(2, 3).Shape.TextFrame.TextRange.Text = _
+                    totalParticipantsWB & " participants / " & totalClientsWB & " clients"
+                .Cell(3, 3).Shape.TextFrame.TextRange.Text = _
+                    dirParticipantsWB & " participants / " & dirClientsWB & " clients"
+                If totalParticipantsWB > 0 Then
+                    .Cell(4, 3).Shape.TextFrame.TextRange.Text = _
+                        Format(dirParticipantsWB / totalParticipantsWB, "0.0%")
                 Else
-                    .Cell(4, 2).Shape.TextFrame.TextRange.Text = "N/A"
+                    .Cell(4, 3).Shape.TextFrame.TextRange.Text = "N/A"
                 End If
             End With
         End If
