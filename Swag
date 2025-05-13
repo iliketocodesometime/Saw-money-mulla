@@ -4,7 +4,8 @@ If upsellAvailable And Not tcXlAddIn Is Nothing Then
     upsellStages = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
 
     Dim upsellCounts(1 To 4, 1 To 3) As Long ' 4 stages × 3 business lines
-    For r = 1 To 4: For c = 1 To 3: upsellCounts(r, c) = 0: Next c: Next r
+    Dim ur As Long, uc As Long
+    For ur = 1 To 4: For uc = 1 To 3: upsellCounts(ur, uc) = 0: Next uc: Next ur
 
     For iRow = 2 To lastRowUpsell
         If Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) = director Then
@@ -27,17 +28,17 @@ If upsellAvailable And Not tcXlAddIn Is Nothing Then
         .Range("C1").Value = "Financial Reporting"
         .Range("D1").Value = "Global Intelligence"
         
-        .Range("A2").Value = "" ' Static empty row
+        .Range("A2").Value = "" ' Static blank
         .Range("A3").Value = "Active Pursuit"
         .Range("A4").Value = "Shortlisted / Decision Pending"
         .Range("A5").Value = "Verbal Agreement"
         .Range("A6").Value = "Contract Negotiation"
         
-        For r = 1 To 4
-            For c = 1 To 3
-                .Cells(r + 2, c + 1).Value = BlankIfZero(upsellCounts(r, c))
-            Next c
-        Next r
+        For ur = 1 To 4
+            For uc = 1 To 3
+                .Cells(ur + 2, uc + 1).Value = BlankIfZero(upsellCounts(ur, uc))
+            Next uc
+        Next ur
     End With
 
     Dim rngUpsell As Range
