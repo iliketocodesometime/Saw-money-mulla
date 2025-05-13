@@ -1,63 +1,47 @@
-Dim wsUpsellPipeline As Worksheet
-Set wsUpsellPipeline = ThisWorkbook.Sheets("Upsell Pipeline")
+'=== (l3) Slide 4: Education Events Table ===
+Dim wsEduEvents As Worksheet
+On Error Resume Next
+Set wsEduEvents = ThisWorkbook.Sheets("Education Events")
+On Error GoTo 0
 
-Dim colDirUpsellPipe As Long, colLineUpsellPipe As Long, colStageUpsellPipe As Long
-colDirUpsellPipe = FindColumnIndex(wsUpsellPipeline, "Director")
-colLineUpsellPipe = FindColumnIndex(wsUpsellPipeline, "GAS Business Line")
-colStageUpsellPipe = FindColumnIndex(wsUpsellPipeline, "Stage")
+If Not wsEduEvents Is Nothing Then
+    Dim colDirEdu As Long
+    colDirEdu = FindColumnIndex(wsEduEvents, "Director")
+    
+    If colDirEdu > 0 Then
+        Dim lastRowEdu As Long
+        lastRowEdu = wsEduEvents.Cells(wsEduEvents.Rows.Count, colDirEdu).End(xlUp).Row
+        
+        Dim totalEduCount As Long: totalEduCount = 0
+        Dim directorEduCount As Long: directorEduCount = 0
 
-If colDirUpsellPipe = 0 Or colLineUpsellPipe = 0 Or colStageUpsellPipe = 0 Then
-    MsgBox "Missing columns in 'Upsell Pipeline' tab"
-    Exit Sub
-End If
-
-
-'=== (l2) Slide 4: ThinkCell "Chart 126" (Upsell Pipeline: 6x4 layout) ===
-If Not wsUpsellPipeline Is Nothing And Not tcXlAddIn Is Nothing Then
-    Dim upsellStages As Variant
-    upsellStages = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
-
-    Dim upsellCounts(1 To 4, 1 To 3) As Long
-    Dim ur As Long, uc As Long
-    For ur = 1 To 4: For uc = 1 To 3: upsellCounts(ur, uc) = 0: Next uc: Next ur
-
-    Dim lastRowUpsell As Long
-    lastRowUpsell = wsUpsellPipeline.Cells(wsUpsellPipeline.Rows.Count, 1).End(xlUp).Row
-
-    For iRow = 2 To lastRowUpsell
-        If Trim(wsUpsellPipeline.Cells(iRow, colDirUpsellPipe).Value) = director Then
-            Dim upsStage As String: upsStage = Trim(wsUpsellPipeline.Cells(iRow, colStageUpsellPipe).Value)
-            Dim upsLine As String: upsLine = Trim(wsUpsellPipeline.Cells(iRow, colLineUpsellPipe).Value)
-
-            Dim upsStageIdx As Long: upsStageIdx = MatchStageIndex(upsStage, upsellStages)
-            Dim upsLineIdx As Long: upsLineIdx = MatchGASIndex(upsLine, arrGAS)
-            If upsStageIdx > 0 And upsLineIdx > 0 Then
-                upsellCounts(upsStageIdx, upsLineIdx) = upsellCounts(upsStageIdx, upsLineIdx) + 1
+        For iRow = 2 To lastRowEdu
+            Dim dirVal As String
+            dirVal = Trim(wsEduEvents.Cells(iRow, colDirEdu).Value)
+            If IsDirectorValid(dirVal) Then
+                totalEduCount = totalEduCount + 1
+                If dirVal = director Then
+                    directorEduCount = directorEduCount + 1
+                End If
             End If
+        Next iRow
+
+        Dim shpEdu As PowerPoint.Shape
+        On Error Resume Next
+        Set shpEdu = pres.Slides(4).Shapes("TableEducation")
+        On Error GoTo 0
+
+        If Not shpEdu Is Nothing Then
+            With shpEdu.Table
+                .Cell(1, 2).Shape.TextFrame.TextRange.Text = "Education Events"
+                .Cell(2, 2).Shape.TextFrame.TextRange.Text = CStr(totalEduCount)
+                .Cell(3, 2).Shape.TextFrame.TextRange.Text = CStr(directorEduCount)
+                If totalEduCount > 0 Then
+                    .Cell(4, 2).Shape.TextFrame.TextRange.Text = Format(directorEduCount / totalEduCount, "0.0%")
+                Else
+                    .Cell(4, 2).Shape.TextFrame.TextRange.Text = "N/A"
+                End If
+            End With
         End If
-    Next iRow
-
-    With wsHelper
-        .Range("A1:D6").ClearContents
-        .Range("A1").Value = "Upsell Pipeline"
-        .Range("B1").Value = "Advanced Solutions"
-        .Range("C1").Value = "Financial Reporting"
-        .Range("D1").Value = "Global Intelligence"
-
-        .Range("A2").Value = "" ' static, don't write
-        .Range("A3").Value = "Active Pursuit"
-        .Range("A4").Value = "Shortlisted / Decision Pending"
-        .Range("A5").Value = "Verbal Agreement"
-        .Range("A6").Value = "Contract Negotiation"
-
-        For ur = 1 To 4
-            For uc = 1 To 3
-                .Cells(ur + 2, uc + 1).Value = BlankIfZero(upsellCounts(ur, uc))
-            Next uc
-        Next ur
-    End With
-
-    Dim rngUpsell As Range
-    Set rngUpsell = wsHelper.Range("A1:D6")
-    tcXlAddIn.UpdateChart pres.Slides(4), "Chart 126", rngUpsell, False
+    End If
 End If
