@@ -3,37 +3,36 @@ If upsellAvailable And Not tcXlAddIn Is Nothing Then
     Dim upsellStages As Variant
     upsellStages = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
 
-    Dim upsellCounts(1 To 4, 1 To 3) As Long ' 4 stages × 3 business lines
+    Dim upsellCounts(1 To 4, 1 To 3) As Long
     Dim ur As Long, uc As Long
     For ur = 1 To 4: For uc = 1 To 3: upsellCounts(ur, uc) = 0: Next uc: Next ur
 
     For iRow = 2 To lastRowUpsell
         If Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) = director Then
-            Dim stageVal As String: stageVal = Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value)
-            Dim lineVal As String: lineVal = Trim(wsUpsellClosed.Cells(iRow, colLineUpsell).Value)
+            Dim upsStage As String: upsStage = Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value)
+            Dim upsLine As String: upsLine = Trim(wsUpsellClosed.Cells(iRow, colLineUpsell).Value)
 
-            Dim stageIdx As Long: stageIdx = MatchStageIndex(stageVal, upsellStages)
-            Dim lineIdx As Long: lineIdx = MatchGASIndex(lineVal, arrGAS)
-            If stageIdx > 0 And lineIdx > 0 Then
-                upsellCounts(stageIdx, lineIdx) = upsellCounts(stageIdx, lineIdx) + 1
+            Dim upsStageIdx As Long: upsStageIdx = MatchStageIndex(upsStage, upsellStages)
+            Dim upsLineIdx As Long: upsLineIdx = MatchGASIndex(upsLine, arrGAS)
+            If upsStageIdx > 0 And upsLineIdx > 0 Then
+                upsellCounts(upsStageIdx, upsLineIdx) = upsellCounts(upsStageIdx, upsLineIdx) + 1
             End If
         End If
     Next iRow
 
-    ' Output to helper (6 rows x 4 columns)
     With wsHelper
         .Range("A1:D6").ClearContents
         .Range("A1").Value = "Upsell Pipeline"
         .Range("B1").Value = "Advanced Solutions"
         .Range("C1").Value = "Financial Reporting"
         .Range("D1").Value = "Global Intelligence"
-        
-        .Range("A2").Value = "" ' Static blank
+
+        .Range("A2").Value = ""
         .Range("A3").Value = "Active Pursuit"
         .Range("A4").Value = "Shortlisted / Decision Pending"
         .Range("A5").Value = "Verbal Agreement"
         .Range("A6").Value = "Contract Negotiation"
-        
+
         For ur = 1 To 4
             For uc = 1 To 3
                 .Cells(ur + 2, uc + 1).Value = BlankIfZero(upsellCounts(ur, uc))
