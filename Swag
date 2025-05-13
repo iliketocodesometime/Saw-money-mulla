@@ -1,54 +1,37 @@
-'=== (q) Slide 10 "TableCSP" (Cross Sell Pipeline reference with stage and opp type filter) ===
-On Error Resume Next
-Set shpNPS = pres.Slides(10).Shapes("TableCSP")
-On Error GoTo 0
-If Not shpNPS Is Nothing Then
-    Set tbl = shpNPS.Table
-    Do While tbl.Rows.Count > 1: tbl.Rows(tbl.Rows.Count).Delete: Loop
-
-    Dim validPipelineStages As Variant
-    validPipelineStages = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
-
-    Dim arrOppTypes As Variant
-    arrOppTypes = Array( _
-        "Charitable Giving Opportunity", _
-        "Corporate Cash Opportunity", _
-        "Institutional Consulting Opportunity", _
-        "Non-Qualified Deferred Compensation Opportunity", _
-        "Retirement Opportunity" _
-    )
-
-    For iRow = 2 To lastRowCrossPipe2
-        If Trim(wsCrossSellPipe.Cells(iRow, colDirCSPipe).Value) = director Then
-            Dim stageVal As String, oppTypeVal As String
-            stageVal = Trim(wsCrossSellPipe.Cells(iRow, colStageCSPipe).Value)
-            oppTypeVal = Trim(wsCrossSellPipe.Cells(iRow, colOppTypeCSPipe).Value)
-
-            Dim isValidStage As Boolean: isValidStage = False
-            Dim isValidType As Boolean: isValidType = False
-
-            Dim s As Long, t As Long
-            For s = LBound(validPipelineStages) To UBound(validPipelineStages)
-                If stageVal = validPipelineStages(s) Then
-                    isValidStage = True
-                    Exit For
-                End If
-            Next s
-            For t = LBound(arrOppTypes) To UBound(arrOppTypes)
-                If oppTypeVal = arrOppTypes(t) Then
-                    isValidType = True
-                    Exit For
-                End If
-            Next t
-
-            If isValidStage And isValidType Then
-                tbl.Rows.Add
-                With tbl.Rows(tbl.Rows.Count)
-                    .Cells(1).Shape.TextFrame.TextRange.Text = CStr(wsCrossSellPipe.Cells(iRow, FindColumnIndex(wsCrossSellPipe, "Account Name")).Value)
-                    .Cells(2).Shape.TextFrame.TextRange.Text = oppTypeVal
-                    .Cells(3).Shape.TextFrame.TextRange.Text = stageVal
-                End With
-            End If
+'=== (l2) Slide 4: ThinkCell Chart 126 (Upsell Pipeline by Stage & Business Line) ===
+If upsellAvailable And Not tcXlAddIn Is Nothing Then
+    Dim stageMap As Variant
+    stageMap = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
+    
+    Dim upsellPipe(1 To 4, 1 To 3) As Long ' 4 stages × 3 lines
+    For r = 1 To 4: For c = 1 To 3: upsellPipe(r, c) = 0: Next c: Next r
+    
+    For iRow = 2 To lastRowUpsell
+        If Not IsError(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) And _
+           Not IsError(wsUpsellClosed.Cells(iRow, colStageUpsell).Value) And _
+           Not IsError(wsUpsellClosed.Cells(iRow, colLineUpsell).Value) Then
+           
+           If Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) = director Then
+                Dim sIdx As Long: sIdx = MatchStageIndex(Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value), stageMap)
+                Dim lIdx As Long: lIdx = MatchGASIndex(Trim(wsUpsellClosed.Cells(iRow, colLineUpsell).Value), arrGAS)
+                If sIdx > 0 And lIdx > 0 Then upsellPipe(sIdx, lIdx) = upsellPipe(sIdx, lIdx) + 1
+           End If
         End If
     Next iRow
+    
+    With wsHelper
+        .Range("A1:E10").ClearContents
+        .Range("A1").Value = "Upsell Pipeline"
+        .Range("B1").Resize(1, 3).Value = arrGAS
+        For r = 1 To 4
+            .Cells(r + 1, 1).Value = stageMap(r - 1)
+            For c = 1 To 3
+                .Cells(r + 1, c + 1).Value = BlankIfZero(upsellPipe(r, c))
+            Next c
+        Next r
+    End With
+    
+    Dim rngUpsellPipe As Range
+    Set rngUpsellPipe = wsHelper.Range("A1:D6")
+    tcXlAddIn.UpdateChart pres.Slides(4), "Chart 126", rngUpsellPipe, False
 End If
