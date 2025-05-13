@@ -1,4 +1,4 @@
-'=== (q) Slide 10 "TableCSP" (Cross Sell Pipeline reference with stage filter) ===
+'=== (q) Slide 10 "TableCSP" (Cross Sell Pipeline reference with stage and opp type filter) ===
 On Error Resume Next
 Set shpNPS = pres.Slides(10).Shapes("TableCSP")
 On Error GoTo 0
@@ -9,25 +9,43 @@ If Not shpNPS Is Nothing Then
     Dim validPipelineStages As Variant
     validPipelineStages = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
 
+    Dim arrOppTypes As Variant
+    arrOppTypes = Array( _
+        "Charitable Giving Opportunity", _
+        "Corporate Cash Opportunity", _
+        "Institutional Consulting Opportunity", _
+        "Non-Qualified Deferred Compensation Opportunity", _
+        "Retirement Opportunity" _
+    )
+
     For iRow = 2 To lastRowCrossPipe2
         If Trim(wsCrossSellPipe.Cells(iRow, colDirCSPipe).Value) = director Then
-            Dim stageVal As String
+            Dim stageVal As String, oppTypeVal As String
             stageVal = Trim(wsCrossSellPipe.Cells(iRow, colStageCSPipe).Value)
-            Dim isValidStage As Boolean: isValidStage = False
+            oppTypeVal = Trim(wsCrossSellPipe.Cells(iRow, colOppTypeCSPipe).Value)
 
-            Dim s As Long
+            Dim isValidStage As Boolean: isValidStage = False
+            Dim isValidType As Boolean: isValidType = False
+
+            Dim s As Long, t As Long
             For s = LBound(validPipelineStages) To UBound(validPipelineStages)
                 If stageVal = validPipelineStages(s) Then
                     isValidStage = True
                     Exit For
                 End If
             Next s
+            For t = LBound(arrOppTypes) To UBound(arrOppTypes)
+                If oppTypeVal = arrOppTypes(t) Then
+                    isValidType = True
+                    Exit For
+                End If
+            Next t
 
-            If isValidStage Then
+            If isValidStage And isValidType Then
                 tbl.Rows.Add
                 With tbl.Rows(tbl.Rows.Count)
                     .Cells(1).Shape.TextFrame.TextRange.Text = CStr(wsCrossSellPipe.Cells(iRow, FindColumnIndex(wsCrossSellPipe, "Account Name")).Value)
-                    .Cells(2).Shape.TextFrame.TextRange.Text = CStr(wsCrossSellPipe.Cells(iRow, colOppTypeCSPipe).Value)
+                    .Cells(2).Shape.TextFrame.TextRange.Text = oppTypeVal
                     .Cells(3).Shape.TextFrame.TextRange.Text = stageVal
                 End With
             End If
