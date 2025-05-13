@@ -1,6 +1,24 @@
 =LET(
   txt, LOWER(TEXTJOIN(" ", TRUE, A2:D2)),
-  dirs, {"smith","johnson","williams","brown","jones","miller","davis","garcia"},
-  hit, XMATCH(TRUE, ISNUMBER(SEARCH(dirs, txt)), 0),
-  IF(ISNUMBER(hit), PROPER(INDEX(dirs, hit)), "")
+
+  terms, {"smith","dr smith","s smith",
+          "johnson","j. johnson","jjohnson",
+          "williams","will","wm",
+          "brown","brn","brow",
+          "jones","jns",
+          "miller","mlr",
+          "davis","dvs",
+          "garcia","grc"},
+          
+  director, {"Smith","Smith","Smith",
+             "Johnson","Johnson","Johnson",
+             "Williams","Williams","Williams",
+             "Brown","Brown","Brown",
+             "Jones","Jones",
+             "Miller","Miller",
+             "Davis","Davis",
+             "Garcia","Garcia"},
+
+  hit, XMATCH(TRUE, ISNUMBER(SEARCH(terms, txt)), 0),
+  IF(ISNUMBER(hit), INDEX(director, hit), "")
 )
