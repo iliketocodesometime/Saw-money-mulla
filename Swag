@@ -1,13 +1,15 @@
 Dim wsUpsellPipeline As Worksheet
 Set wsUpsellPipeline = ThisWorkbook.Sheets("Upsell Pipeline")
 
-colDirUpsell = FindColumnIndex(wsUpsellPipeline, "Director")
-colLineUpsell = FindColumnIndex(wsUpsellPipeline, "GAS Business Line")
-colStageUpsell = FindColumnIndex(wsUpsellPipeline, "Stage")
+Dim colDirUpsellPipe As Long, colLineUpsellPipe As Long, colStageUpsellPipe As Long
+colDirUpsellPipe = FindColumnIndex(wsUpsellPipeline, "Director")
+colLineUpsellPipe = FindColumnIndex(wsUpsellPipeline, "GAS Business Line")
+colStageUpsellPipe = FindColumnIndex(wsUpsellPipeline, "Stage")
 
-
-
-
+If colDirUpsellPipe = 0 Or colLineUpsellPipe = 0 Or colStageUpsellPipe = 0 Then
+    MsgBox "Missing columns in 'Upsell Pipeline' tab"
+    Exit Sub
+End If
 
 
 '=== (l2) Slide 4: ThinkCell "Chart 126" (Upsell Pipeline: 6x4 layout) ===
@@ -23,9 +25,9 @@ If Not wsUpsellPipeline Is Nothing And Not tcXlAddIn Is Nothing Then
     lastRowUpsell = wsUpsellPipeline.Cells(wsUpsellPipeline.Rows.Count, 1).End(xlUp).Row
 
     For iRow = 2 To lastRowUpsell
-        If Trim(wsUpsellPipeline.Cells(iRow, colDirUpsell).Value) = director Then
-            Dim upsStage As String: upsStage = Trim(wsUpsellPipeline.Cells(iRow, colStageUpsell).Value)
-            Dim upsLine As String: upsLine = Trim(wsUpsellPipeline.Cells(iRow, colLineUpsell).Value)
+        If Trim(wsUpsellPipeline.Cells(iRow, colDirUpsellPipe).Value) = director Then
+            Dim upsStage As String: upsStage = Trim(wsUpsellPipeline.Cells(iRow, colStageUpsellPipe).Value)
+            Dim upsLine As String: upsLine = Trim(wsUpsellPipeline.Cells(iRow, colLineUpsellPipe).Value)
 
             Dim upsStageIdx As Long: upsStageIdx = MatchStageIndex(upsStage, upsellStages)
             Dim upsLineIdx As Long: upsLineIdx = MatchGASIndex(upsLine, arrGAS)
@@ -42,7 +44,7 @@ If Not wsUpsellPipeline Is Nothing And Not tcXlAddIn Is Nothing Then
         .Range("C1").Value = "Financial Reporting"
         .Range("D1").Value = "Global Intelligence"
 
-        .Range("A2").Value = "" ' static
+        .Range("A2").Value = "" ' static, don't write
         .Range("A3").Value = "Active Pursuit"
         .Range("A4").Value = "Shortlisted / Decision Pending"
         .Range("A5").Value = "Verbal Agreement"
