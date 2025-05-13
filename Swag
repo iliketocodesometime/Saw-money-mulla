@@ -1,9 +1,8 @@
 Option Explicit
-
-'----------------------------------------------------------------------------------
-' Finds the column index (1‑based) where row 1 matches headerName (case‑insensitive).
-' Returns 0 if not found.
-'----------------------------------------------------------------------------------
+'==================================================================================
+'  HELPER FUNCTIONS  (one copy only)
+'==================================================================================
+'--- column finder ----------------------------------------------------------------
 Private Function FindColumnIndex(ws As Worksheet, ByVal headerName As String) As Long
     Dim lastCol As Long: lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     Dim c As Long
@@ -16,9 +15,7 @@ Private Function FindColumnIndex(ws As Worksheet, ByVal headerName As String) As
     FindColumnIndex = 0
 End Function
 
-'----------------------------------------------------------------------------------
-' Map helpers
-'----------------------------------------------------------------------------------
+'--- cross‑sell opportunity → index ----------------------------------------------
 Private Function MatchOppTypeIndex(ByVal oppType As String, ByVal arrOpp() As String) As Long
     Dim i As Long
     For i = LBound(arrOpp) To UBound(arrOpp)
@@ -28,6 +25,7 @@ Private Function MatchOppTypeIndex(ByVal oppType As String, ByVal arrOpp() As St
     Next i
 End Function
 
+'--- pipeline stage → index -------------------------------------------------------
 Private Function MatchStageIndex(ByVal stageName As String, ByVal arrStg() As String) As Long
     Dim j As Long
     For j = LBound(arrStg) To UBound(arrStg)
@@ -37,6 +35,7 @@ Private Function MatchStageIndex(ByVal stageName As String, ByVal arrStg() As St
     Next j
 End Function
 
+'--- GAS business line → index ----------------------------------------------------
 Private Function MatchGASIndex(ByVal busLine As String, ByVal arrGAS() As String) As Long
     Dim k As Long
     For k = LBound(arrGAS) To UBound(arrGAS)
@@ -46,24 +45,24 @@ Private Function MatchGASIndex(ByVal busLine As String, ByVal arrGAS() As String
     Next k
 End Function
 
-'----------------------------------------------------------------------------------
-' Validation helpers
-'----------------------------------------------------------------------------------
+'--- director validity ------------------------------------------------------------
 Private Function IsDirectorValid(ByVal dirStr As String) As Boolean
-    Dim tmp As String: tmp = Trim$(dirStr)
-    IsDirectorValid = (tmp <> "" And tmp <> "-" And UCase$(tmp) <> "HOME OFFICE")
+    Dim t As String: t = Trim$(dirStr)
+    IsDirectorValid = (t <> "" And t <> "-" And UCase$(t) <> "HOME OFFICE")
 End Function
 
+'--- blank‑if‑zero (for Think‑Cell) ----------------------------------------------
 Private Function BlankIfZero(ByVal n) As Variant
     If n = 0 Then BlankIfZero = "" Else BlankIfZero = n
 End Function
-
-'----------------------------------------------------------------------------------
-' Main
-'----------------------------------------------------------------------------------
+'==================================================================================
+'  MAIN MACRO
+'==================================================================================
 Sub GeneratePPTsPerDirector()
 
-    '--- 1. Sheets ---
+    '----------------------------------------------------------------------
+    ' (1) Sheet objects
+    '----------------------------------------------------------------------
     Dim wsPipeline As Worksheet, wsSales As Worksheet
     Dim wsCrossSell As Worksheet, wsCrossSellPipe As Worksheet
     Dim wsUpsellClosed As Worksheet, wsClientIndex As Worksheet
@@ -82,7 +81,9 @@ Sub GeneratePPTsPerDirector()
         MsgBox "Required sheets missing.": Exit Sub
     End If
     
-    '--- 1B. Helper sheet ---
+    '----------------------------------------------------------------------
+    ' (2) Helper sheet
+    '----------------------------------------------------------------------
     Dim wsHelper As Worksheet
     On Error Resume Next: Set wsHelper = ThisWorkbook.Sheets("Helper"): On Error GoTo 0
     If wsHelper Is Nothing Then
@@ -90,8 +91,10 @@ Sub GeneratePPTsPerDirector()
         wsHelper.Name = "Helper": wsHelper.Visible = xlSheetHidden
     End If
     
-    '--- 2. Column indexes ---
-    ' Pipeline
+    '----------------------------------------------------------------------
+    ' (3) Column indexes
+    '----------------------------------------------------------------------
+    '--- Pipeline
     Dim colDirPipe&, colStagePipe&, colAUMPipe&, colPartPipe&
     colDirPipe = FindColumnIndex(wsPipeline, "Director")
     colStagePipe = FindColumnIndex(wsPipeline, "Stage")
@@ -101,24 +104,22 @@ Sub GeneratePPTsPerDirector()
         MsgBox "Headers missing in New Plan Pipeline.": Exit Sub
     End If
     
-    ' Sales
+    '--- Sales
     Dim colAccSales&, colDirSales&, colPartSales&, colAUMSales&
     Dim colCloseSales&, colStageSales&, colAUMAcctSales&
     colAccSales = FindColumnIndex(wsSales, "Account Name")
     colDirSales = FindColumnIndex(wsSales, "Director")
     colPartSales = FindColumnIndex(wsSales, "Estimated Participants")
     colAUMSales = FindColumnIndex(wsSales, "Total AUM (converted)")
-    
     colCloseSales = FindColumnIndex(wsSales, "Close Date")
     colStageSales = FindColumnIndex(wsSales, "Stage")
     colAUMAcctSales = FindColumnIndex(wsSales, "Estimated AUM (Account)")
-    
     If colAccSales * colDirSales * colPartSales * colAUMSales = 0 Or _
        colCloseSales * colStageSales * colAUMAcctSales = 0 Then
         MsgBox "Headers missing in New Plan Sales.": Exit Sub
     End If
     
-    ' Cross‑sell closed
+    '--- Cross‑Sell Closed Won
     Dim colDirCSC&, colOppCSC&, colStageCSC&
     colDirCSC = FindColumnIndex(wsCrossSell, "Director")
     colOppCSC = FindColumnIndex(wsCrossSell, "Opportunity Record Type")
@@ -127,7 +128,7 @@ Sub GeneratePPTsPerDirector()
         MsgBox "Headers missing in Cross Sell Closed Won.": Exit Sub
     End If
     
-    ' Cross‑sell pipeline
+    '--- Cross‑Sell Pipeline
     Dim colDirCSP&, colOppCSP&, colStageCSP&
     colDirCSP = FindColumnIndex(wsCrossSellPipe, "Director")
     colOppCSP = FindColumnIndex(wsCrossSellPipe, "Opportunity Record Type")
@@ -136,7 +137,7 @@ Sub GeneratePPTsPerDirector()
         MsgBox "Headers missing in Cross Sell Pipeline.": Exit Sub
     End If
     
-    ' Upsell
+    '--- Upsell
     Dim upsellAvail As Boolean: upsellAvail = Not wsUpsellClosed Is Nothing
     Dim colDirUp&, colLineUp&, colStageUp&
     If upsellAvail Then
@@ -146,18 +147,16 @@ Sub GeneratePPTsPerDirector()
         If colDirUp * colLineUp * colStageUp = 0 Then upsellAvail = False
     End If
     
-    '--- 3. Director dictionary (Pipeline + Client Index) ---
+    '----------------------------------------------------------------------
+    ' (4) Director list  (Pipeline + Client Index)
+    '----------------------------------------------------------------------
     Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
-    Dim r&, lastRow&
-    
-    ' from pipeline
-    lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, 1).End(xlUp).Row
+    Dim r&, lastRow&: lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, 1).End(xlUp).Row
     For r = 2 To lastRow
         If IsDirectorValid(wsPipeline.Cells(r, colDirPipe).Value) Then
             dict(wsPipeline.Cells(r, colDirPipe).Value) = 1
         End If
     Next r
-    ' from client index
     If Not wsClientIndex Is Nothing Then
         Dim colDirCI&: colDirCI = FindColumnIndex(wsClientIndex, "Director")
         If colDirCI > 0 Then
@@ -170,7 +169,9 @@ Sub GeneratePPTsPerDirector()
         End If
     End If
     
-    '--- 4. Pre‑compute totals for slide 2 ---
+    '----------------------------------------------------------------------
+    ' (5) Pre‑compute “all‑director” totals for slide 2
+    '----------------------------------------------------------------------
     Dim totAcc&, totPart&, totAUM#
     lastRow = wsSales.Cells(wsSales.Rows.Count, 1).End(xlUp).Row
     For r = 2 To lastRow
@@ -181,7 +182,9 @@ Sub GeneratePPTsPerDirector()
         End If
     Next r
     
-    '--- 5. Static arrays ---
+    '----------------------------------------------------------------------
+    ' (6) Static arrays
+    '----------------------------------------------------------------------
     Dim stageLbl(): stageLbl = Array("Active Pursuit", "Shortlisted / Decision Pending", _
                                      "Verbal Agreement", "Contract Negotiation")
     Dim oppTypes(): oppTypes = Array("Charitable Giving Opportunity", "Corporate Cash Opportunity", _
@@ -189,7 +192,7 @@ Sub GeneratePPTsPerDirector()
                                      "Retirement Opportunity")
     Dim gasArr(): gasArr = Array("Advanced Solutions", "Financial Reporting", "Global Intelligence")
     
-    ' Cross‑sell totals
+    ' cross‑sell totals
     Dim totCS(1 To 5) As Long
     lastRow = wsCrossSell.Cells(wsCrossSell.Rows.Count, 1).End(xlUp).Row
     For r = 2 To lastRow
@@ -200,7 +203,7 @@ Sub GeneratePPTsPerDirector()
         End If
     Next r
     
-    ' Upsell totals
+    ' upsell totals
     Dim totUp(1 To 3) As Long, lastUp&
     If upsellAvail Then
         lastUp = wsUpsellClosed.Cells(wsUpsellClosed.Rows.Count, 1).End(xlUp).Row
@@ -213,17 +216,23 @@ Sub GeneratePPTsPerDirector()
         Next r
     End If
     
-    '--- 6. PowerPoint / Think‑Cell handles ---
+    '----------------------------------------------------------------------
+    ' (7) Think‑Cell & PowerPoint handles
+    '----------------------------------------------------------------------
     Dim tc As Object: On Error Resume Next
     Set tc = Application.COMAddIns("thinkcell.addin").Object: On Error GoTo 0
     
     Dim ppApp As PowerPoint.Application: Set ppApp = New PowerPoint.Application
     
-    '--- 7. Loop through directors ---
+    '======================================================================
+    ' (8) LOOP THROUGH EACH DIRECTOR
+    '======================================================================
     Dim dir
     For Each dir In dict.Keys
         
-        '----- Pipeline counts for this director -----
+        '--------------------------------------------------------------
+        ' 8A. Pipeline stage counts for this director
+        '--------------------------------------------------------------
         Dim stCnt(1 To 4) As Long, stAUM(1 To 4) As Double, stPart(1 To 4) As Long
         lastRow = wsPipeline.Cells(wsPipeline.Rows.Count, 1).End(xlUp).Row
         For r = 2 To lastRow
@@ -237,9 +246,12 @@ Sub GeneratePPTsPerDirector()
             End If
         Next r
         
-        '----- Sales director‑specific totals (for slide 2 table) -----
+        '--------------------------------------------------------------
+        ' 8B. Sales totals for this director  (slide 2 numeric table)
+        '--------------------------------------------------------------
         Dim dAcc&, dPart&, dAUM#
-        For r = 2 To wsSales.Cells(wsSales.Rows.Count, 1).End(xlUp).Row
+        lastRow = wsSales.Cells(wsSales.Rows.Count, 1).End(xlUp).Row
+        For r = 2 To lastRow
             If Trim$(wsSales.Cells(r, colDirSales).Value) = dir Then
                 If Trim$(wsSales.Cells(r, colAccSales).Value) <> "" Then dAcc = dAcc + 1
                 dPart = dPart + Val(wsSales.Cells(r, colPartSales).Value)
@@ -247,29 +259,38 @@ Sub GeneratePPTsPerDirector()
             End If
         Next r
         
-        '----- Open template -----
+        '--------------------------------------------------------------
+        ' 8C. Open template presentation
+        '--------------------------------------------------------------
         Dim pres As PowerPoint.Presentation
         Set pres = ppApp.Presentations.Open("C:\TemplateFolder\template1.pptx", , , msoFalse)
         
-        '----- Slide 2 Think‑Cell chart -----
+        '--------------------------------------------------------------
+        ' 8D. Slide 2 Think‑Cell chart
+        '--------------------------------------------------------------
         If Not tc Is Nothing Then
             With wsHelper
                 .Range("A1:E3").ClearContents
                 .Range("B1:E1").Value = stageLbl
+                .Range("A3").Value = ""
                 .Range("B3").Resize(, 4).Value = Array(BlankIfZero(stCnt(1)), BlankIfZero(stCnt(2)), _
                                                        BlankIfZero(stCnt(3)), BlankIfZero(stCnt(4)))
             End With
             tc.UpdateChart pres.Slides(2), "Chart1", wsHelper.Range("A1:E3"), False
         End If
         
-        '----- Slide 1 -----
+        '--------------------------------------------------------------
+        ' 8E. Slide 1 title / quarter
+        '--------------------------------------------------------------
         With pres.Slides(1)
             .Shapes("Title").TextFrame.TextRange.Text = dir
             .Shapes("Quarter").TextFrame.TextRange.Text = _
                 "Q" & Int((Month(Date) - 1) / 3 + 1) & " " & Year(Date)
         End With
         
-        '----- Slide 2 numeric table -----
+        '--------------------------------------------------------------
+        ' 8F. Slide 2 numeric table
+        '--------------------------------------------------------------
         Dim tbl5 As PowerPoint.Table: Set tbl5 = pres.Slides(2).Shapes("Table 5").Table
         tbl5.Cell(2, 2).Shape.TextFrame.TextRange.Text = dAcc
         tbl5.Cell(2, 3).Shape.TextFrame.TextRange.Text = totAcc
@@ -281,19 +302,22 @@ Sub GeneratePPTsPerDirector()
         tbl5.Cell(4, 3).Shape.TextFrame.TextRange.Text = totPart
         tbl5.Cell(4, 4).Shape.TextFrame.TextRange.Text = IIf(totPart, Format(dPart / totPart, "0.0%"), "N/A")
         
-        '----- (existing slides 3‑4 logic stays the same) -----
-        ' ...  (code omitted here for brevity – unchanged from previous full version) ...
+        '--------------------------------------------------------------
+        ' 8G.  (Slides 3‑4 cross‑sell / upsell – unchanged from earlier)
+        '      … you can keep the logic you already had here …
+        '--------------------------------------------------------------
+        ' ***  (Omitted in this snippet for brevity – keep existing code) ***
         
-        '=======================================================================
-        ' NEW:  Slide 7 – “TableNPS”  (Account detail list)
-        '=======================================================================
+        '==================================================================
+        ' 8H.  NEW  Slide 7 – TableNPS  (Account‑level detail)
+        '==================================================================
         Dim shpNPS As PowerPoint.Shape
         On Error Resume Next: Set shpNPS = pres.Slides(7).Shapes("TableNPS"): On Error GoTo 0
         If Not shpNPS Is Nothing Then
             
             Dim tblNPS As PowerPoint.Table: Set tblNPS = shpNPS.Table
             
-            'clear existing rows (keep header row #1)
+            ' wipe old data rows, keep header row
             Do While tblNPS.Rows.Count > 1: tblNPS.Rows(tblNPS.Rows.Count).Delete: Loop
             
             Dim rowIx As Long: rowIx = 2
@@ -301,7 +325,6 @@ Sub GeneratePPTsPerDirector()
             
             For r = 2 To lastRow
                 If Trim$(wsSales.Cells(r, colDirSales).Value) = dir Then
-                    ' ensure enough rows
                     If rowIx > tblNPS.Rows.Count Then tblNPS.Rows.Add
                     tblNPS.Cell(rowIx, 1).Shape.TextFrame.TextRange.Text = _
                         Trim$(wsSales.Cells(r, colAccSales).Value)
@@ -316,11 +339,12 @@ Sub GeneratePPTsPerDirector()
                     rowIx = rowIx + 1
                 End If
             Next r
-            
         End If
-        '=======================================================================
+        '==================================================================
         
-        '----- Save & close -----
+        '--------------------------------------------------------------
+        ' 8I. Save & close
+        '--------------------------------------------------------------
         pres.SaveAs "C:\OutputPPTs\" & dir & "_Pipeline.pptx"
         pres.Close
     Next dir
