@@ -1,37 +1,46 @@
-'=== (l2) Slide 4: ThinkCell Chart 126 (Upsell Pipeline by Stage & Business Line) ===
+'=== (l2) Slide 4: ThinkCell "Chart 126" (Upsell Pipeline: 6x4 layout) ===
 If upsellAvailable And Not tcXlAddIn Is Nothing Then
-    Dim stageMap As Variant
-    stageMap = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
-    
-    Dim upsellPipe(1 To 4, 1 To 3) As Long ' 4 stages × 3 lines
-    For r = 1 To 4: For c = 1 To 3: upsellPipe(r, c) = 0: Next c: Next r
-    
+    Dim upsellStages As Variant
+    upsellStages = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
+
+    Dim upsellCounts(1 To 4, 1 To 3) As Long ' 4 stages × 3 business lines
+    For r = 1 To 4: For c = 1 To 3: upsellCounts(r, c) = 0: Next c: Next r
+
     For iRow = 2 To lastRowUpsell
-        If Not IsError(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) And _
-           Not IsError(wsUpsellClosed.Cells(iRow, colStageUpsell).Value) And _
-           Not IsError(wsUpsellClosed.Cells(iRow, colLineUpsell).Value) Then
-           
-           If Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) = director Then
-                Dim sIdx As Long: sIdx = MatchStageIndex(Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value), stageMap)
-                Dim lIdx As Long: lIdx = MatchGASIndex(Trim(wsUpsellClosed.Cells(iRow, colLineUpsell).Value), arrGAS)
-                If sIdx > 0 And lIdx > 0 Then upsellPipe(sIdx, lIdx) = upsellPipe(sIdx, lIdx) + 1
-           End If
+        If Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) = director Then
+            Dim stageVal As String: stageVal = Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value)
+            Dim lineVal As String: lineVal = Trim(wsUpsellClosed.Cells(iRow, colLineUpsell).Value)
+
+            Dim stageIdx As Long: stageIdx = MatchStageIndex(stageVal, upsellStages)
+            Dim lineIdx As Long: lineIdx = MatchGASIndex(lineVal, arrGAS)
+            If stageIdx > 0 And lineIdx > 0 Then
+                upsellCounts(stageIdx, lineIdx) = upsellCounts(stageIdx, lineIdx) + 1
+            End If
         End If
     Next iRow
-    
+
+    ' Output to helper (6 rows x 4 columns)
     With wsHelper
-        .Range("A1:E10").ClearContents
+        .Range("A1:D6").ClearContents
         .Range("A1").Value = "Upsell Pipeline"
-        .Range("B1").Resize(1, 3).Value = arrGAS
+        .Range("B1").Value = "Advanced Solutions"
+        .Range("C1").Value = "Financial Reporting"
+        .Range("D1").Value = "Global Intelligence"
+        
+        .Range("A2").Value = "" ' Static empty row
+        .Range("A3").Value = "Active Pursuit"
+        .Range("A4").Value = "Shortlisted / Decision Pending"
+        .Range("A5").Value = "Verbal Agreement"
+        .Range("A6").Value = "Contract Negotiation"
+        
         For r = 1 To 4
-            .Cells(r + 1, 1).Value = stageMap(r - 1)
             For c = 1 To 3
-                .Cells(r + 1, c + 1).Value = BlankIfZero(upsellPipe(r, c))
+                .Cells(r + 2, c + 1).Value = BlankIfZero(upsellCounts(r, c))
             Next c
         Next r
     End With
-    
-    Dim rngUpsellPipe As Range
-    Set rngUpsellPipe = wsHelper.Range("A1:D6")
-    tcXlAddIn.UpdateChart pres.Slides(4), "Chart 126", rngUpsellPipe, False
+
+    Dim rngUpsell As Range
+    Set rngUpsell = wsHelper.Range("A1:D6")
+    tcXlAddIn.UpdateChart pres.Slides(4), "Chart 126", rngUpsell, False
 End If
