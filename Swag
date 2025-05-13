@@ -1,62 +1,6 @@
-/* Row‑level formula: Director (Text) */
-/* Replace the eight names (and their search strings) with your actual directors. */
-/* Converts columns to lowercase first to make the search case‑insensitive. */
-
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"smith"),
-    CONTAINS(LOWER(ColumnB__c),"smith"),
-    CONTAINS(LOWER(ColumnC__c),"smith"),
-    CONTAINS(LOWER(ColumnD__c),"smith")
-  ), "Smith",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"johnson"),
-    CONTAINS(LOWER(ColumnB__c),"johnson"),
-    CONTAINS(LOWER(ColumnC__c),"johnson"),
-    CONTAINS(LOWER(ColumnD__c),"johnson")
-  ), "Johnson",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"williams"),
-    CONTAINS(LOWER(ColumnB__c),"williams"),
-    CONTAINS(LOWER(ColumnC__c),"williams"),
-    CONTAINS(LOWER(ColumnD__c),"williams")
-  ), "Williams",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"brown"),
-    CONTAINS(LOWER(ColumnB__c),"brown"),
-    CONTAINS(LOWER(ColumnC__c),"brown"),
-    CONTAINS(LOWER(ColumnD__c),"brown")
-  ), "Brown",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"jones"),
-    CONTAINS(LOWER(ColumnB__c),"jones"),
-    CONTAINS(LOWER(ColumnC__c),"jones"),
-    CONTAINS(LOWER(ColumnD__c),"jones")
-  ), "Jones",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"miller"),
-    CONTAINS(LOWER(ColumnB__c),"miller"),
-    CONTAINS(LOWER(ColumnC__c),"miller"),
-    CONTAINS(LOWER(ColumnD__c),"miller")
-  ), "Miller",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"davis"),
-    CONTAINS(LOWER(ColumnB__c),"davis"),
-    CONTAINS(LOWER(ColumnC__c),"davis"),
-    CONTAINS(LOWER(ColumnD__c),"davis")
-  ), "Davis",
-IF(
-  OR(
-    CONTAINS(LOWER(ColumnA__c),"garcia"),
-    CONTAINS(LOWER(ColumnB__c),"garcia"),
-    CONTAINS(LOWER(ColumnC__c),"garcia"),
-    CONTAINS(LOWER(ColumnD__c),"garcia")
-  ), "Garcia",
-""
-))))))))
+=LET(
+  txt, LOWER(TEXTJOIN(" ", TRUE, A2:D2)),
+  dirs, {"smith","johnson","williams","brown","jones","miller","davis","garcia"},
+  hit, XMATCH(TRUE, ISNUMBER(SEARCH(dirs, txt)), 0),
+  IF(ISNUMBER(hit), PROPER(INDEX(dirs, hit)), "")
+)
