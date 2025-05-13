@@ -27,7 +27,7 @@ If upsellAvailable And Not tcXlAddIn Is Nothing Then
         .Range("C1").Value = "Financial Reporting"
         .Range("D1").Value = "Global Intelligence"
 
-        .Range("A2").Value = ""
+        .Range("A2").Value = "" ' Do not touch row 2 (static)
         .Range("A3").Value = "Active Pursuit"
         .Range("A4").Value = "Shortlisted / Decision Pending"
         .Range("A5").Value = "Verbal Agreement"
