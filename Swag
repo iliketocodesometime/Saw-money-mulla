@@ -1,42 +1,84 @@
-'=== (n) Slide 7 "TableNPS" (New Plan Sales reference data) ===
+'=== (o) Slide 8 "TableNPP" (New Plan Pipeline reference data) ===
 On Error Resume Next
-Dim shpNPS As PowerPoint.Shape
-Set shpNPS = pres.Slides(7).Shapes("TableNPS")
+Set shpNPS = pres.Slides(8).Shapes("TableNPP")
 On Error GoTo 0
-
 If Not shpNPS Is Nothing Then
-    Dim tbl As PowerPoint.Table
     Set tbl = shpNPS.Table
+    Do While tbl.Rows.Count > 1: tbl.Rows(tbl.Rows.Count).Delete: Loop
 
-    ' Clear all rows except header
-    Do While tbl.Rows.Count > 1
-        tbl.Rows(tbl.Rows.Count).Delete
-    Loop
-
-    For iRow = 2 To lastRowSales
-        If Not IsError(wsSales.Cells(iRow, colDirSales).Value) Then
-            Dim dRef As String
-            dRef = Trim(wsSales.Cells(iRow, colDirSales).Value)
-            If dRef = director And IsDirectorValid(dRef) Then
-                Dim accName As String, closeDate As String, stage As String
-                Dim estAUM As String, estParts As String
-
-                accName = CStr(wsSales.Cells(iRow, colAccSales).Value)
-                closeDate = CStr(wsSales.Cells(iRow, FindColumnIndex(wsSales, "Close Date")).Value)
-                stage = CStr(wsSales.Cells(iRow, FindColumnIndex(wsSales, "Stage")).Value)
-                estAUM = CStr(wsSales.Cells(iRow, colAUMSales).Value)
-                estParts = CStr(wsSales.Cells(iRow, colPartSales).Value)
-
-                ' Add new row
-                tbl.Rows.Add
-                With tbl.Rows(tbl.Rows.Count)
-                    .Cells(1).Shape.TextFrame.TextRange.Text = accName
-                    .Cells(2).Shape.TextFrame.TextRange.Text = closeDate
-                    .Cells(3).Shape.TextFrame.TextRange.Text = stage
-                    .Cells(4).Shape.TextFrame.TextRange.Text = estAUM
-                    .Cells(5).Shape.TextFrame.TextRange.Text = estParts
-                End With
-            End If
+    For iRow = 2 To lastRowPipe
+        If Trim(wsPipeline.Cells(iRow, colDirPipeline).Value) = director Then
+            tbl.Rows.Add
+            With tbl.Rows(tbl.Rows.Count)
+                .Cells(1).Shape.TextFrame.TextRange.Text = CStr(wsPipeline.Cells(iRow, FindColumnIndex(wsPipeline, "Account Name")).Value)
+                .Cells(2).Shape.TextFrame.TextRange.Text = CStr(wsPipeline.Cells(iRow, colStagePipeline).Value)
+                .Cells(3).Shape.TextFrame.TextRange.Text = CStr(wsPipeline.Cells(iRow, colAUMPipeline).Value)
+                .Cells(4).Shape.TextFrame.TextRange.Text = CStr(wsPipeline.Cells(iRow, colPartPipeline).Value)
+            End With
         End If
     Next iRow
+End If
+
+'=== (p) Slide 9 "TableCSCW" (Cross Sell Closed Won reference) ===
+On Error Resume Next
+Set shpNPS = pres.Slides(9).Shapes("TableCSCW")
+On Error GoTo 0
+If Not shpNPS Is Nothing Then
+    Set tbl = shpNPS.Table
+    Do While tbl.Rows.Count > 1: tbl.Rows(tbl.Rows.Count).Delete: Loop
+
+    For iRow = 2 To lastRowCross
+        If Trim(wsCrossSell.Cells(iRow, colDirCSClosed).Value) = director And _
+           Trim(wsCrossSell.Cells(iRow, colStageCSClosed).Value) = "Closed Won" Then
+            tbl.Rows.Add
+            With tbl.Rows(tbl.Rows.Count)
+                .Cells(1).Shape.TextFrame.TextRange.Text = CStr(wsCrossSell.Cells(iRow, FindColumnIndex(wsCrossSell, "Account Name")).Value)
+                .Cells(2).Shape.TextFrame.TextRange.Text = CStr(wsCrossSell.Cells(iRow, colOppTypeCSClosed).Value)
+                .Cells(3).Shape.TextFrame.TextRange.Text = CStr(wsCrossSell.Cells(iRow, colStageCSClosed).Value)
+            End With
+        End If
+    Next iRow
+End If
+
+'=== (q) Slide 10 "TableCSP" (Cross Sell Pipeline reference) ===
+On Error Resume Next
+Set shpNPS = pres.Slides(10).Shapes("TableCSP")
+On Error GoTo 0
+If Not shpNPS Is Nothing Then
+    Set tbl = shpNPS.Table
+    Do While tbl.Rows.Count > 1: tbl.Rows(tbl.Rows.Count).Delete: Loop
+
+    For iRow = 2 To lastRowCrossPipe2
+        If Trim(wsCrossSellPipe.Cells(iRow, colDirCSPipe).Value) = director Then
+            tbl.Rows.Add
+            With tbl.Rows(tbl.Rows.Count)
+                .Cells(1).Shape.TextFrame.TextRange.Text = CStr(wsCrossSellPipe.Cells(iRow, FindColumnIndex(wsCrossSellPipe, "Account Name")).Value)
+                .Cells(2).Shape.TextFrame.TextRange.Text = CStr(wsCrossSellPipe.Cells(iRow, colOppTypeCSPipe).Value)
+                .Cells(3).Shape.TextFrame.TextRange.Text = CStr(wsCrossSellPipe.Cells(iRow, colStageCSPipe).Value)
+            End With
+        End If
+    Next iRow
+End If
+
+'=== (r) Slide 11 "TableUCW" (Upsell Closed Won reference) ===
+If upsellAvailable Then
+    On Error Resume Next
+    Set shpNPS = pres.Slides(11).Shapes("TableUCW")
+    On Error GoTo 0
+    If Not shpNPS Is Nothing Then
+        Set tbl = shpNPS.Table
+        Do While tbl.Rows.Count > 1: tbl.Rows(tbl.Rows.Count).Delete: Loop
+
+        For iRow = 2 To lastRowUpsell
+            If Trim(wsUpsellClosed.Cells(iRow, colDirUpsell).Value) = director And _
+               Trim(wsUpsellClosed.Cells(iRow, colStageUpsell).Value) = "Closed Won" Then
+                tbl.Rows.Add
+                With tbl.Rows(tbl.Rows.Count)
+                    .Cells(1).Shape.TextFrame.TextRange.Text = CStr(wsUpsellClosed.Cells(iRow, FindColumnIndex(wsUpsellClosed, "Account Name")).Value)
+                    .Cells(2).Shape.TextFrame.TextRange.Text = CStr(wsUpsellClosed.Cells(iRow, colLineUpsell).Value)
+                    .Cells(3).Shape.TextFrame.TextRange.Text = CStr(wsUpsellClosed.Cells(iRow, colStageUpsell).Value)
+                End With
+            End If
+        Next iRow
+    End If
 End If
