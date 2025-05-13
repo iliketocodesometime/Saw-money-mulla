@@ -1,8 +1,62 @@
-=IF(OR(A1=1,B1=1,C1=1),"1",
- IF(OR(A1=2,B1=2,C1=2),"2",
- IF(OR(A1=3,B1=3,C1=3),"3",
- IF(OR(A1=4,B1=4,C1=4),"4",
- IF(OR(A1=5,B1=5,C1=5),"5",
- IF(OR(A1=6,B1=6,C1=6),"6",
- IF(OR(A1=7,B1=7,C1=7),"7",
- IF(OR(A1=8,B1=8,C1=8),"8",""))))))))
+/* Row‑level formula: Director (Text) */
+/* Replace the eight names (and their search strings) with your actual directors. */
+/* Converts columns to lowercase first to make the search case‑insensitive. */
+
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"smith"),
+    CONTAINS(LOWER(ColumnB__c),"smith"),
+    CONTAINS(LOWER(ColumnC__c),"smith"),
+    CONTAINS(LOWER(ColumnD__c),"smith")
+  ), "Smith",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"johnson"),
+    CONTAINS(LOWER(ColumnB__c),"johnson"),
+    CONTAINS(LOWER(ColumnC__c),"johnson"),
+    CONTAINS(LOWER(ColumnD__c),"johnson")
+  ), "Johnson",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"williams"),
+    CONTAINS(LOWER(ColumnB__c),"williams"),
+    CONTAINS(LOWER(ColumnC__c),"williams"),
+    CONTAINS(LOWER(ColumnD__c),"williams")
+  ), "Williams",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"brown"),
+    CONTAINS(LOWER(ColumnB__c),"brown"),
+    CONTAINS(LOWER(ColumnC__c),"brown"),
+    CONTAINS(LOWER(ColumnD__c),"brown")
+  ), "Brown",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"jones"),
+    CONTAINS(LOWER(ColumnB__c),"jones"),
+    CONTAINS(LOWER(ColumnC__c),"jones"),
+    CONTAINS(LOWER(ColumnD__c),"jones")
+  ), "Jones",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"miller"),
+    CONTAINS(LOWER(ColumnB__c),"miller"),
+    CONTAINS(LOWER(ColumnC__c),"miller"),
+    CONTAINS(LOWER(ColumnD__c),"miller")
+  ), "Miller",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"davis"),
+    CONTAINS(LOWER(ColumnB__c),"davis"),
+    CONTAINS(LOWER(ColumnC__c),"davis"),
+    CONTAINS(LOWER(ColumnD__c),"davis")
+  ), "Davis",
+IF(
+  OR(
+    CONTAINS(LOWER(ColumnA__c),"garcia"),
+    CONTAINS(LOWER(ColumnB__c),"garcia"),
+    CONTAINS(LOWER(ColumnC__c),"garcia"),
+    CONTAINS(LOWER(ColumnD__c),"garcia")
+  ), "Garcia",
+""
+))))))))
