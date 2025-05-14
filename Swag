@@ -1,3 +1,152 @@
-Private Function InQuarter(d As Date, q As Long, y As Long) As Boolean
-    InQuarter = (Year(d) = y) And (Int((Month(d) - 1) / 3) + 1 = q)
-End Function
+'=== (m-1) Slide 5: TableReinvest with Q/Q and Y/Y additions ===
+Dim wsSPD As Worksheet, wsSPDH As Worksheet
+Set wsSPD = ThisWorkbook.Sheets("SPD Revenue")
+Set wsSPDH = ThisWorkbook.Sheets("SPD Revenue Historical")
+
+If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
+    Dim colDirSPD As Long, colAcctSPD As Long, colDateSPD As Long
+    Dim colAttrSPD As Long, colYTDSPD As Long
+    Dim colDirSPDH As Long, colAcctSPDH As Long, colDateSPDH As Long
+    Dim colAttrSPDH As Long, colYTDSPDH As Long
+
+    colDirSPD = FindColumnIndex(wsSPD, "Director")
+    colAcctSPD = FindColumnIndex(wsSPD, "KEY_ACCT_PRIMARY")
+    colDateSPD = FindColumnIndex(wsSPD, "ALG_FUND_DATE")
+    colAttrSPD = FindColumnIndex(wsSPD, "ATTRB")
+    colYTDSPD = FindColumnIndex(wsSPD, "YTD_NNA")
+
+    colDirSPDH = FindColumnIndex(wsSPDH, "Director")
+    colAcctSPDH = FindColumnIndex(wsSPDH, "KEY_ACCT_PRIMARY")
+    colDateSPDH = FindColumnIndex(wsSPDH, "ALG_FUND_DATE")
+    colAttrSPDH = FindColumnIndex(wsSPDH, "ATTRB")
+    colYTDSPDH = FindColumnIndex(wsSPDH, "YTD_NNA")
+
+    If colDirSPD * colAcctSPD * colDateSPD * colAttrSPD * colYTDSPD = 0 Or _
+       colDirSPDH * colAcctSPDH * colDateSPDH * colAttrSPDH * colYTDSPDH = 0 Then Exit Sub
+
+    ' Determine current quarter from max ALG_FUND_DATE
+    Dim latestDate As Date: latestDate = DateSerial(2000, 1, 1)
+    Dim rowSPD As Long, dStr As String
+    For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, colDateSPD).End(xlUp).Row
+        dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
+        If dStr <> "" Then
+            Dim d As Date
+            On Error Resume Next: d = CDate(Left(dStr, 10)): On Error GoTo 0
+            If d > latestDate Then latestDate = d
+        End If
+    Next rowSPD
+
+    Dim qtr As Long: qtr = Int((Month(latestDate) - 1) / 3) + 1
+    Dim yr As Long: yr = Year(latestDate)
+
+    Dim prevQtr As Long, prevYr As Long
+    If qtr = 1 Then
+        prevQtr = 4: prevYr = yr - 1
+    Else
+        prevQtr = qtr - 1: prevYr = yr
+    End If
+
+    Dim lastYr As Long: lastYr = yr - 1
+
+    ' Initialize metrics
+    Dim countNow As Long, countPrev As Long, countLastYr As Long
+    Dim sumNow As Double, sumPrev As Double, sumLastYr As Double
+    countNow = 0: countPrev = 0: countLastYr = 0
+    sumNow = 0: sumPrev = 0: sumLastYr = 0
+
+    ' Process current year
+    For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, 1).End(xlUp).Row
+        If Trim(wsSPD.Cells(rowSPD, colDirSPD).Value) = director Then
+            If UCase(Trim(wsSPD.Cells(rowSPD, colAttrSPD).Value)) = "DISTRIBUTED" Then
+                dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
+                If dStr <> "" Then
+                    Dim dCur As Date: On Error Resume Next: dCur = CDate(Left(dStr, 10)): On Error GoTo 0
+                    If InQuarter(dCur, qtr, yr) Then
+                        countNow = countNow + 1
+                        If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
+                            sumNow = sumNow + wsSPD.Cells(rowSPD, colYTDSPD).Value
+                        End If
+                    ElseIf InQuarter(dCur, prevQtr, prevYr) Then
+                        countPrev = countPrev + 1
+                        If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
+                            sumPrev = sumPrev + wsSPD.Cells(rowSPD, colYTDSPD).Value
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next rowSPD
+
+    ' Process last year
+    Dim dStrHist As String
+    For rowSPD = 2 To wsSPDH.Cells(wsSPDH.Rows.Count, 1).End(xlUp).Row
+        If Trim(wsSPDH.Cells(rowSPD, colDirSPDH).Value) = director Then
+            If UCase(Trim(wsSPDH.Cells(rowSPD, colAttrSPDH).Value)) = "DISTRIBUTED" Then
+                dStrHist = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
+                If dStrHist <> "" Then
+                    Dim dHist As Date: On Error Resume Next: dHist = CDate(Left(dStrHist, 10)): On Error GoTo 0
+                    If InQuarter(dHist, qtr, lastYr) Then
+                        countLastYr = countLastYr + 1
+                        If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
+                            sumLastYr = sumLastYr + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next rowSPD
+
+    ' Output to TableReinvest
+    Dim shpReinvest As PowerPoint.Shape
+    Set shpReinvest = pres.Slides(5).Shapes("TableReinvest")
+
+    If Not shpReinvest Is Nothing Then
+        With shpReinvest.Table
+            .Cell(1, 2).Shape.TextFrame.TextRange.Text = "YTD"
+            .Cell(1, 3).Shape.TextFrame.TextRange.Text = "Q" & qtr & " " & yr
+            .Cell(1, 4).Shape.TextFrame.TextRange.Text = "Q" & prevQtr & " " & prevYr
+            .Cell(1, 5).Shape.TextFrame.TextRange.Text = "Q/Q Change"
+            .Cell(1, 6).Shape.TextFrame.TextRange.Text = "Q" & qtr & " " & lastYr
+            .Cell(1, 7).Shape.TextFrame.TextRange.Text = "Y/Y Change"
+
+            .Cell(2, 1).Shape.TextFrame.TextRange.Text = "New Accounts"
+            .Cell(3, 1).Shape.TextFrame.TextRange.Text = "YTD NNA"
+
+            .Cell(2, 2).Shape.TextFrame.TextRange.Text = countNow
+            .Cell(3, 2).Shape.TextFrame.TextRange.Text = Format(sumNow, "$#,##0")
+
+            .Cell(2, 3).Shape.TextFrame.TextRange.Text = countNow
+            .Cell(3, 3).Shape.TextFrame.TextRange.Text = Format(sumNow, "$#,##0")
+
+            .Cell(2, 4).Shape.TextFrame.TextRange.Text = countPrev
+            .Cell(3, 4).Shape.TextFrame.TextRange.Text = Format(sumPrev, "$#,##0")
+
+            If countPrev > 0 Then
+                .Cell(2, 5).Shape.TextFrame.TextRange.Text = Format((countNow - countPrev) / countPrev, "0.0%")
+            Else
+                .Cell(2, 5).Shape.TextFrame.TextRange.Text = "N/A"
+            End If
+
+            If sumPrev > 0 Then
+                .Cell(3, 5).Shape.TextFrame.TextRange.Text = Format((sumNow - sumPrev) / sumPrev, "0.0%")
+            Else
+                .Cell(3, 5).Shape.TextFrame.TextRange.Text = "N/A"
+            End If
+
+            .Cell(2, 6).Shape.TextFrame.TextRange.Text = countLastYr
+            .Cell(3, 6).Shape.TextFrame.TextRange.Text = Format(sumLastYr, "$#,##0")
+
+            If countLastYr > 0 Then
+                .Cell(2, 7).Shape.TextFrame.TextRange.Text = Format((countNow - countLastYr) / countLastYr, "0.0%")
+            Else
+                .Cell(2, 7).Shape.TextFrame.TextRange.Text = "N/A"
+            End If
+
+            If sumLastYr > 0 Then
+                .Cell(3, 7).Shape.TextFrame.TextRange.Text = Format((sumNow - sumLastYr) / sumLastYr, "0.0%")
+            Else
+                .Cell(3, 7).Shape.TextFrame.TextRange.Text = "N/A"
+            End If
+        End With
+    End If
+End If
