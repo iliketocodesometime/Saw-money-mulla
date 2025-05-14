@@ -54,6 +54,9 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
     countNow = 0: countPrev = 0: countLastYr = 0
     sumNow = 0: sumPrev = 0: sumLastYr = 0
 
+    ' --- Helper function ---
+    ' Outside sub: Function InQuarter(d As Date, q As Long, y As Long) As Boolean
+
     ' Process current quarter from SPD Revenue
     For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, 1).End(xlUp).Row
         If Trim(wsSPD.Cells(rowSPD, colDirSPD).Value) = director Then
@@ -72,21 +75,51 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
         End If
     Next rowSPD
 
-    ' Process previous quarter and last year quarter from SPD Revenue Historical
-    Dim dStrHist As String
+    ' Process previous quarter
+    If prevYr = yr Then
+        For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, 1).End(xlUp).Row
+            If Trim(wsSPD.Cells(rowSPD, colDirSPD).Value) = director Then
+                If UCase(Trim(wsSPD.Cells(rowSPD, colAttrSPD).Value)) = "DISTRIBUTED" Then
+                    dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
+                    If dStr <> "" Then
+                        Dim dPrev As Date: On Error Resume Next: dPrev = CDate(Left(dStr, 10)): On Error GoTo 0
+                        If InQuarter(dPrev, prevQtr, prevYr) Then
+                            countPrev = countPrev + 1
+                            If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
+                                sumPrev = sumPrev + wsSPD.Cells(rowSPD, colYTDSPD).Value
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        Next rowSPD
+    Else
+        For rowSPD = 2 To wsSPDH.Cells(wsSPDH.Rows.Count, 1).End(xlUp).Row
+            If Trim(wsSPDH.Cells(rowSPD, colDirSPDH).Value) = director Then
+                If UCase(Trim(wsSPDH.Cells(rowSPD, colAttrSPDH).Value)) = "DISTRIBUTED" Then
+                    dStr = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
+                    If dStr <> "" Then
+                        Dim dPrevH As Date: On Error Resume Next: dPrevH = CDate(Left(dStr, 10)): On Error GoTo 0
+                        If InQuarter(dPrevH, prevQtr, prevYr) Then
+                            countPrev = countPrev + 1
+                            If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
+                                sumPrev = sumPrev + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        Next rowSPD
+    End If
+
+    ' Process last year same quarter (always from historical)
     For rowSPD = 2 To wsSPDH.Cells(wsSPDH.Rows.Count, 1).End(xlUp).Row
         If Trim(wsSPDH.Cells(rowSPD, colDirSPDH).Value) = director Then
             If UCase(Trim(wsSPDH.Cells(rowSPD, colAttrSPDH).Value)) = "DISTRIBUTED" Then
-                dStrHist = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
-                If dStrHist <> "" Then
-                    Dim dHist As Date: On Error Resume Next: dHist = CDate(Left(dStrHist, 10)): On Error GoTo 0
-
-                    If InQuarter(dHist, prevQtr, prevYr) Then
-                        countPrev = countPrev + 1
-                        If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
-                            sumPrev = sumPrev + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
-                        End If
-                    ElseIf InQuarter(dHist, qtr, lastYr) Then
+                dStr = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
+                If dStr <> "" Then
+                    Dim dLY As Date: On Error Resume Next: dLY = CDate(Left(dStr, 10)): On Error GoTo 0
+                    If InQuarter(dLY, qtr, lastYr) Then
                         countLastYr = countLastYr + 1
                         If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
                             sumLastYr = sumLastYr + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
