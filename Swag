@@ -54,7 +54,7 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
     countNow = 0: countPrev = 0: countLastYr = 0
     sumNow = 0: sumPrev = 0: sumLastYr = 0
 
-    ' Process current year
+    ' Process current quarter from SPD Revenue
     For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, 1).End(xlUp).Row
         If Trim(wsSPD.Cells(rowSPD, colDirSPD).Value) = director Then
             If UCase(Trim(wsSPD.Cells(rowSPD, colAttrSPD).Value)) = "DISTRIBUTED" Then
@@ -66,18 +66,13 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
                         If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
                             sumNow = sumNow + wsSPD.Cells(rowSPD, colYTDSPD).Value
                         End If
-                    ElseIf InQuarter(dCur, prevQtr, prevYr) Then
-                        countPrev = countPrev + 1
-                        If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
-                            sumPrev = sumPrev + wsSPD.Cells(rowSPD, colYTDSPD).Value
-                        End If
                     End If
                 End If
             End If
         End If
     Next rowSPD
 
-    ' Process last year
+    ' Process previous quarter and last year quarter from SPD Revenue Historical
     Dim dStrHist As String
     For rowSPD = 2 To wsSPDH.Cells(wsSPDH.Rows.Count, 1).End(xlUp).Row
         If Trim(wsSPDH.Cells(rowSPD, colDirSPDH).Value) = director Then
@@ -85,7 +80,13 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
                 dStrHist = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
                 If dStrHist <> "" Then
                     Dim dHist As Date: On Error Resume Next: dHist = CDate(Left(dStrHist, 10)): On Error GoTo 0
-                    If InQuarter(dHist, qtr, lastYr) Then
+
+                    If InQuarter(dHist, prevQtr, prevYr) Then
+                        countPrev = countPrev + 1
+                        If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
+                            sumPrev = sumPrev + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
+                        End If
+                    ElseIf InQuarter(dHist, qtr, lastYr) Then
                         countLastYr = countLastYr + 1
                         If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
                             sumLastYr = sumLastYr + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
