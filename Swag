@@ -1,1 +1,5 @@
-
+Private Function InQuarter(d As Date, q As Long, y As Long) As Boolean
+    Dim m As Long
+    m = Month(d)
+    InQuarter = (Year(d) = y) And (Int((m - 1) / 3) + 1 = q)
+End Function
