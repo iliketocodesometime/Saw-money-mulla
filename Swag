@@ -1,60 +1,49 @@
-'=== (l4) Slide 4: Workplace Banking Table ===
-Dim wsWorkplace As Worksheet
+'=== (l5) Slide 4: ThinkCell "DeepPipe" (Workplace Banking Pipeline) ===
+Dim wsWBPipe As Worksheet
 On Error Resume Next
-Set wsWorkplace = ThisWorkbook.Sheets("Workplace Banking Closed Won")
+Set wsWBPipe = ThisWorkbook.Sheets("Workplace Banking Pipeline")
 On Error GoTo 0
 
-If Not wsWorkplace Is Nothing Then
-    Dim colDirWB As Long, colPartWB As Long
-    colDirWB = FindColumnIndex(wsWorkplace, "Director")
-    colPartWB = FindColumnIndex(wsWorkplace, "# US Participants")
+If Not wsWBPipe Is Nothing And Not tcXlAddIn Is Nothing Then
+    Dim colDirWBPipe As Long, colStageWBPipe As Long
+    colDirWBPipe = FindColumnIndex(wsWBPipe, "Director")
+    colStageWBPipe = FindColumnIndex(wsWBPipe, "Stage")
 
-    If colDirWB > 0 And colPartWB > 0 Then
-        Dim lastRowWB As Long
-        lastRowWB = wsWorkplace.Cells(wsWorkplace.Rows.Count, colDirWB).End(xlUp).Row
+    If colDirWBPipe > 0 And colStageWBPipe > 0 Then
+        Dim stageLabelsWB As Variant
+        stageLabelsWB = Array("Early Stage", "Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
 
-        Dim totalParticipantsWB As Long: totalParticipantsWB = 0
-        Dim totalClientsWB As Long: totalClientsWB = 0
-        Dim dirParticipantsWB As Long: dirParticipantsWB = 0
-        Dim dirClientsWB As Long: dirClientsWB = 0
+        Dim deepPipeCounts(1 To 5) As Long
+        Dim lastRowWBPipe As Long
+        lastRowWBPipe = wsWBPipe.Cells(wsWBPipe.Rows.Count, colDirWBPipe).End(xlUp).Row
 
-        For iRow = 2 To lastRowWB
-            Dim dirWB As String
-            dirWB = Trim(wsWorkplace.Cells(iRow, colDirWB).Value)
-            If IsDirectorValid(dirWB) Then
-                totalClientsWB = totalClientsWB + 1
-                If IsNumeric(wsWorkplace.Cells(iRow, colPartWB).Value) Then
-                    totalParticipantsWB = totalParticipantsWB + wsWorkplace.Cells(iRow, colPartWB).Value
-                End If
-                
-                If dirWB = director Then
-                    dirClientsWB = dirClientsWB + 1
-                    If IsNumeric(wsWorkplace.Cells(iRow, colPartWB).Value) Then
-                        dirParticipantsWB = dirParticipantsWB + wsWorkplace.Cells(iRow, colPartWB).Value
-                    End If
-                End If
+        For iRow = 2 To lastRowWBPipe
+            If Trim(wsWBPipe.Cells(iRow, colDirWBPipe).Value) = director Then
+                Dim stageValWB As String
+                stageValWB = Trim(wsWBPipe.Cells(iRow, colStageWBPipe).Value)
+                Dim idxWB As Long: idxWB = MatchStageIndex(stageValWB, stageLabelsWB)
+                If idxWB > 0 Then deepPipeCounts(idxWB) = deepPipeCounts(idxWB) + 1
             End If
         Next iRow
 
-        Dim shpDeep As PowerPoint.Shape
-        On Error Resume Next
-        Set shpDeep = pres.Slides(4).Shapes("TableDeep")
-        On Error GoTo 0
+        With wsHelper
+            .Range("A1:B7").ClearContents
+            .Range("A1").Value = "Deepening Pipeline"
+            .Range("B1").Value = director ' optional label
+            .Range("A3").Value = "Early Stage"
+            .Range("A4").Value = "Active Pursuit"
+            .Range("A5").Value = "Shortlisted / Decision Pending"
+            .Range("A6").Value = "Verbal Agreement"
+            .Range("A7").Value = "Contract Negotiation"
+            
+            Dim rrWB As Long
+            For rrWB = 1 To 5
+                .Cells(rrWB + 2, 2).Value = BlankIfZero(deepPipeCounts(rrWB))
+            Next rrWB
+        End With
 
-        If Not shpDeep Is Nothing Then
-            With shpDeep.Table
-                .Cell(1, 3).Shape.TextFrame.TextRange.Text = "Workplace Banking"
-                .Cell(2, 3).Shape.TextFrame.TextRange.Text = _
-                    totalParticipantsWB & " participants / " & totalClientsWB & " clients"
-                .Cell(3, 3).Shape.TextFrame.TextRange.Text = _
-                    dirParticipantsWB & " participants / " & dirClientsWB & " clients"
-                If totalParticipantsWB > 0 Then
-                    .Cell(4, 3).Shape.TextFrame.TextRange.Text = _
-                        Format(dirParticipantsWB / totalParticipantsWB, "0.0%")
-                Else
-                    .Cell(4, 3).Shape.TextFrame.TextRange.Text = "N/A"
-                End If
-            End With
-        End If
+        Dim rngDeepPipe As Range
+        Set rngDeepPipe = wsHelper.Range("A1:B7")
+        tcXlAddIn.UpdateChart pres.Slides(4), "DeepPipe", rngDeepPipe, False
     End If
 End If
