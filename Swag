@@ -63,7 +63,7 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
             If UCase(Trim(wsSPD.Cells(rowSPD, colAttrSPD).Value)) = "DISTRIBUTED" Then
                 dParsed = ParseFundDate(wsSPD.Cells(rowSPD, colDateSPD).Value)
                 If Not IsError(dParsed) Then
-                    If InQuarter(dParsed, qtr, yr) Then
+                    If InQuarter(CDate(dParsed), , ) Then
                         countNow = countNow + 1
                         If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then sumNow = sumNow + wsSPD.Cells(rowSPD, colYTDSPD).Value
                     End If
