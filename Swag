@@ -1,9 +1,4 @@
-'=== (l5) Slide 4: ThinkCell "DeepPipe" (Workplace Banking Pipeline) ===
-Dim wsWBPipe As Worksheet
-On Error Resume Next
-Set wsWBPipe = ThisWorkbook.Sheets("Workplace Banking Pipeline")
-On Error GoTo 0
-
+'=== (l5) Slide 4: ThinkCell "DeepPipe" (Workplace Banking Pipeline, per Director) ===
 If Not wsWBPipe Is Nothing And Not tcXlAddIn Is Nothing Then
     Dim colDirWBPipe As Long, colStageWBPipe As Long
     colDirWBPipe = FindColumnIndex(wsWBPipe, "Director")
@@ -17,29 +12,37 @@ If Not wsWBPipe Is Nothing And Not tcXlAddIn Is Nothing Then
         Dim lastRowWBPipe As Long
         lastRowWBPipe = wsWBPipe.Cells(wsWBPipe.Rows.Count, colDirWBPipe).End(xlUp).Row
 
+        Dim idxWB As Long, iRow As Long
         For iRow = 2 To lastRowWBPipe
-            If Trim(wsWBPipe.Cells(iRow, colDirWBPipe).Value) = director Then
+            Dim thisDir As String
+            thisDir = Trim(wsWBPipe.Cells(iRow, colDirWBPipe).Value)
+
+            If thisDir = director Then
                 Dim stageValWB As String
                 stageValWB = Trim(wsWBPipe.Cells(iRow, colStageWBPipe).Value)
-                Dim idxWB As Long: idxWB = MatchStageIndex(stageValWB, stageLabelsWB)
-                If idxWB > 0 Then deepPipeCounts(idxWB) = deepPipeCounts(idxWB) + 1
+
+                For idxWB = 0 To UBound(stageLabelsWB)
+                    If stageValWB = stageLabelsWB(idxWB) Then
+                        deepPipeCounts(idxWB + 1) = deepPipeCounts(idxWB + 1) + 1
+                        Exit For
+                    End If
+                Next idxWB
             End If
         Next iRow
 
         With wsHelper
             .Range("A1:B7").ClearContents
             .Range("A1").Value = "Deepening Pipeline"
-            .Range("B1").Value = director ' optional label
+            .Range("B1").Value = director
             .Range("A3").Value = "Early Stage"
             .Range("A4").Value = "Active Pursuit"
             .Range("A5").Value = "Shortlisted / Decision Pending"
             .Range("A6").Value = "Verbal Agreement"
             .Range("A7").Value = "Contract Negotiation"
-            
-            Dim rrWB As Long
-            For rrWB = 1 To 5
-                .Cells(rrWB + 2, 2).Value = BlankIfZero(deepPipeCounts(rrWB))
-            Next rrWB
+
+            For idxWB = 1 To 5
+                .Cells(idxWB + 2, 2).Value = BlankIfZero(deepPipeCounts(idxWB))
+            Next idxWB
         End With
 
         Dim rngDeepPipe As Range
