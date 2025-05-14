@@ -26,9 +26,9 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
 
     ' Determine current quarter from max ALG_FUND_DATE
     Dim latestDate As Date: latestDate = DateSerial(2000, 1, 1)
-    Dim rowSPD As Long
+    Dim rowSPD As Long, dStr As String
     For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, colDateSPD).End(xlUp).Row
-        Dim dStr As String: dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
+        dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
         If dStr <> "" Then
             Dim d As Date
             On Error Resume Next: d = CDate(Left(dStr, 10)): On Error GoTo 0
@@ -58,15 +58,15 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
     For rowSPD = 2 To wsSPD.Cells(wsSPD.Rows.Count, 1).End(xlUp).Row
         If Trim(wsSPD.Cells(rowSPD, colDirSPD).Value) = director Then
             If UCase(Trim(wsSPD.Cells(rowSPD, colAttrSPD).Value)) = "DISTRIBUTED" Then
-                Dim dStr As String: dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
+                dStr = Trim(wsSPD.Cells(rowSPD, colDateSPD).Value)
                 If dStr <> "" Then
-                    Dim d As Date: On Error Resume Next: d = CDate(Left(dStr, 10)): On Error GoTo 0
-                    If InQuarter(d, qtr, yr) Then
+                    Dim dCur As Date: On Error Resume Next: dCur = CDate(Left(dStr, 10)): On Error GoTo 0
+                    If InQuarter(dCur, qtr, yr) Then
                         countNow = countNow + 1
                         If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
                             sumNow = sumNow + wsSPD.Cells(rowSPD, colYTDSPD).Value
                         End If
-                    ElseIf InQuarter(d, prevQtr, prevYr) Then
+                    ElseIf InQuarter(dCur, prevQtr, prevYr) Then
                         countPrev = countPrev + 1
                         If IsNumeric(wsSPD.Cells(rowSPD, colYTDSPD).Value) Then
                             sumPrev = sumPrev + wsSPD.Cells(rowSPD, colYTDSPD).Value
@@ -78,13 +78,14 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
     Next rowSPD
 
     ' Process last year
+    Dim dStrHist As String
     For rowSPD = 2 To wsSPDH.Cells(wsSPDH.Rows.Count, 1).End(xlUp).Row
         If Trim(wsSPDH.Cells(rowSPD, colDirSPDH).Value) = director Then
             If UCase(Trim(wsSPDH.Cells(rowSPD, colAttrSPDH).Value)) = "DISTRIBUTED" Then
-                Dim dStr As String: dStr = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
-                If dStr <> "" Then
-                    Dim d As Date: On Error Resume Next: d = CDate(Left(dStr, 10)): On Error GoTo 0
-                    If InQuarter(d, qtr, lastYr) Then
+                dStrHist = Trim(wsSPDH.Cells(rowSPD, colDateSPDH).Value)
+                If dStrHist <> "" Then
+                    Dim dHist As Date: On Error Resume Next: dHist = CDate(Left(dStrHist, 10)): On Error GoTo 0
+                    If InQuarter(dHist, qtr, lastYr) Then
                         countLastYr = countLastYr + 1
                         If IsNumeric(wsSPDH.Cells(rowSPD, colYTDSPDH).Value) Then
                             sumLastYr = sumLastYr + wsSPDH.Cells(rowSPD, colYTDSPDH).Value
@@ -141,10 +142,3 @@ If Not wsSPD Is Nothing And Not wsSPDH Is Nothing Then
         End With
     End If
 End If
-
-
-
-Private Function InQuarter(d As Date, q As Long, y As Long) As Boolean
-    InQuarter = (Year(d) = y) And (Int((Month(d) - 1) / 3) + 1 = q)
-End Function
-
