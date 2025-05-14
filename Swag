@@ -1,52 +1,41 @@
-'=== (l5) Slide 4: ThinkCell "DeepPipe" (Workplace Banking Pipeline, per Director) ===
+'=== (l5) Slide 4: ThinkCell "DeepPipe" (Workplace Banking Pipeline, per Director, 4-stage) ===
 If Not wsWBPipe Is Nothing And Not tcXlAddIn Is Nothing Then
-    Dim colDirWBPipe As Long, colStageWBPipe As Long
-    colDirWBPipe = FindColumnIndex(wsWBPipe, "Director")
-    colStageWBPipe = FindColumnIndex(wsWBPipe, "Stage")
+    Dim stageLabelsDeep As Variant
+    stageLabelsDeep = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
 
-    If colDirWBPipe > 0 And colStageWBPipe > 0 Then
-        Dim stageLabelsWB As Variant
-        stageLabelsWB = Array("Early Stage", "Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
+    Dim deepPipeCounts(1 To 4) As Long
+    Dim rDeep As Long, cDeep As Long
+    For rDeep = 1 To 4: deepPipeCounts(rDeep) = 0: Next rDeep
 
-        Dim deepPipeCounts(1 To 5) As Long
-        Dim lastRowWBPipe As Long
-        lastRowWBPipe = wsWBPipe.Cells(wsWBPipe.Rows.Count, colDirWBPipe).End(xlUp).Row
+    Dim rowWB As Long
+    For rowWB = 2 To wsWBPipe.Cells(wsWBPipe.Rows.Count, 1).End(xlUp).Row
+        If Trim(wsWBPipe.Cells(rowWB, colDirWBPipe).Value) = director Then
+            Dim stageDeep As String
+            stageDeep = Trim(wsWBPipe.Cells(rowWB, colStageWBPipe).Value)
+            For rDeep = 0 To 3
+                If stageDeep = stageLabelsDeep(rDeep) Then
+                    deepPipeCounts(rDeep + 1) = deepPipeCounts(rDeep + 1) + 1
+                    Exit For
+                End If
+            Next rDeep
+        End If
+    Next rowWB
 
-        Dim idxWB As Long, iRow As Long
-        For iRow = 2 To lastRowWBPipe
-            Dim thisDir As String
-            thisDir = Trim(wsWBPipe.Cells(iRow, colDirWBPipe).Value)
+    With wsHelper
+        .Range("A1:B6").ClearContents
+        .Range("A1").Value = "Deepening Pipeline"
+        .Range("B1").Value = director
+        .Range("A3").Value = "Active Pursuit"
+        .Range("A4").Value = "Shortlisted / Decision Pending"
+        .Range("A5").Value = "Verbal Agreement"
+        .Range("A6").Value = "Contract Negotiation"
 
-            If thisDir = director Then
-                Dim stageValWB As String
-                stageValWB = Trim(wsWBPipe.Cells(iRow, colStageWBPipe).Value)
+        For rDeep = 1 To 4
+            .Cells(rDeep + 2, 2).Value = BlankIfZero(deepPipeCounts(rDeep))
+        Next rDeep
+    End With
 
-                For idxWB = 0 To UBound(stageLabelsWB)
-                    If stageValWB = stageLabelsWB(idxWB) Then
-                        deepPipeCounts(idxWB + 1) = deepPipeCounts(idxWB + 1) + 1
-                        Exit For
-                    End If
-                Next idxWB
-            End If
-        Next iRow
-
-        With wsHelper
-            .Range("A1:B7").ClearContents
-            .Range("A1").Value = "Deepening Pipeline"
-            .Range("B1").Value = director
-            .Range("A3").Value = "Early Stage"
-            .Range("A4").Value = "Active Pursuit"
-            .Range("A5").Value = "Shortlisted / Decision Pending"
-            .Range("A6").Value = "Verbal Agreement"
-            .Range("A7").Value = "Contract Negotiation"
-
-            For idxWB = 1 To 5
-                .Cells(idxWB + 2, 2).Value = BlankIfZero(deepPipeCounts(idxWB))
-            Next idxWB
-        End With
-
-        Dim rngDeepPipe As Range
-        Set rngDeepPipe = wsHelper.Range("A1:B7")
-        tcXlAddIn.UpdateChart pres.Slides(4), "DeepPipe", rngDeepPipe, False
-    End If
+    Dim rngDeepPipe As Range
+    Set rngDeepPipe = wsHelper.Range("A1:B6")
+    tcXlAddIn.UpdateChart pres.Slides(4), "DeepPipe", rngDeepPipe, False
 End If
