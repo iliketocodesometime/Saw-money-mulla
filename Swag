@@ -1,10 +1,29 @@
+Dim colDirWBPipe As Long, colStageWBPipe As Long
+colDirWBPipe = FindColumnIndex(wsWBPipe, "Director")
+colStageWBPipe = FindColumnIndex(wsWBPipe, "Stage")
+
+If colDirWBPipe = 0 Or colStageWBPipe = 0 Then
+    MsgBox "Missing columns in 'Workplace Banking Pipeline'"
+    Exit Sub
+End If
+
+
 '=== (l5) Slide 4: ThinkCell "DeepPipe" (Workplace Banking Pipeline, per Director, 4-stage) ===
 If Not wsWBPipe Is Nothing And Not tcXlAddIn Is Nothing Then
+    Dim colDirWBPipe As Long, colStageWBPipe As Long
+    colDirWBPipe = FindColumnIndex(wsWBPipe, "Director")
+    colStageWBPipe = FindColumnIndex(wsWBPipe, "Stage")
+
+    If colDirWBPipe = 0 Or colStageWBPipe = 0 Then
+        MsgBox "Missing columns in 'Workplace Banking Pipeline'"
+        Exit Sub
+    End If
+
     Dim stageLabelsDeep As Variant
     stageLabelsDeep = Array("Active Pursuit", "Shortlisted / Decision Pending", "Verbal Agreement", "Contract Negotiation")
 
     Dim deepPipeCounts(1 To 4) As Long
-    Dim rDeep As Long, cDeep As Long
+    Dim rDeep As Long
     For rDeep = 1 To 4: deepPipeCounts(rDeep) = 0: Next rDeep
 
     Dim rowWB As Long
