@@ -1,8 +1,9 @@
-df['Director'] = (
-    df['Director Role']                       # start with the role
-      .astype(str).str.strip()                # normalize blanks / trim
-      .replace({'Reinvestment Director': 'IRM Assigned',
-                'Home Office': 'Other',
-                '': 'Other'})                 # map special cases
-      .fillna('Other')                        # NaN → Other
+df['Director'] = np.where(
+    df['Director Role'] == 'Reinvestment Director',
+    'IRM Assigned',
+    np.where(
+        df['Director__C'].fillna('').str.strip().isin(['', 'Home Office']),
+        'Other',
+        df['Director__C']
+    )
 )
