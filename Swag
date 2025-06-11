@@ -1,9 +1,17 @@
-df['Director'] = np.where(
-    df['Director Role'] == 'Reinvestment Director',
-    'IRM Assigned',
-    np.where(
-        df['Director__C'].fillna('').str.strip().isin(['', 'Home Office']),
-        'Other',
-        df['Director__C']
-    )
-)
+IF [Type] = 'Former Customer' THEN
+    IF CONTAINS([Lost Category],'Bankruptcy')
+        OR CONTAINS([Lost Category],'Merger / Acquisition')
+        OR CONTAINS([Lost Category],'Now Managed By Law Firm') THEN
+        'Non-controllable'
+
+    ELSEIF CONTAINS([Lost Category],'Integrated Benefits')
+        OR CONTAINS([Lost Category],'IPO')
+        OR CONTAINS([Lost Category],'No Response / Non Payment')
+        OR CONTAINS([Lost Category],'Operations / Service / Implementation')
+        OR CONTAINS([Lost Category],'Privatized')
+        OR CONTAINS([Lost Category],'Product / Technology Limitations')
+        OR CONTAINS([Lost Category],'Staffing Issue')
+        OR CONTAINS([Lost Category],'Too Expensive') THEN
+        'Controllable'
+    END
+END
