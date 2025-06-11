@@ -1,11 +1,8 @@
-df = (
-    df.assign(
-        _score=df.apply(
-            lambda r: (r.notna() & (r.astype(str).str.strip() != "")).sum(), axis=1
-        )
-    )
-    .sort_values(['BBB Number', '_score'], ascending=[True, False])
-    .drop_duplicates('BBB Number', keep='first')
-    .drop(columns='_score')
-    .reset_index(drop=True)
+df['Director'] = (
+    df['Director Role']                       # start with the role
+      .astype(str).str.strip()                # normalize blanks / trim
+      .replace({'Reinvestment Director': 'IRM Assigned',
+                'Home Office': 'Other',
+                '': 'Other'})                 # map special cases
+      .fillna('Other')                        # NaN → Other
 )
