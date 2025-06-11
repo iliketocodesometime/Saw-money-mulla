@@ -1,1 +1,11 @@
-
+df = (
+    df.assign(
+        _score=df.apply(
+            lambda r: (r.notna() & (r.astype(str).str.strip() != "")).sum(), axis=1
+        )
+    )
+    .sort_values(['BBB Number', '_score'], ascending=[True, False])
+    .drop_duplicates('BBB Number', keep='first')
+    .drop(columns='_score')
+    .reset_index(drop=True)
+)
