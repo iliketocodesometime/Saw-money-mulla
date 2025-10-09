@@ -10,8 +10,8 @@ Private Const TAB_PRICE As String = "Stock Price"
 ' >>> SET THESE <<<
 Private Const PPT_TEMPLATE_PATH As String = "C:\Path\To\Your\Template.pptx"
 Private Const OUTPUT_DIR As String = "C:\Path\To\Output\"
-' think-cell chart’s “UpdateChart Name” on Slide 26
-Private Const UPDATECHART_NAME As String = "Slide26_Combo"
+' think-cell chart’s “UpdateChart Name” on Slide 26 (you said this is already set to Chart26)
+Private Const UPDATECHART_NAME As String = "Chart26"
 
 '==========================
 ' MAIN ENTRY POINT
@@ -28,7 +28,7 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
     Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
     On Error GoTo 0
 
-    '--- Open source workbook ---
+    '--- Open source workbook if needed ---
     On Error Resume Next
     Set srcWb = Workbooks(SRC_WB_NAME)
     On Error GoTo 0
@@ -47,13 +47,18 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
         GoTo Cleanup
     End If
 
-    '--- PowerPoint must be visible ---
+    '--- PowerPoint must be visible for think-cell ---
     Set ppApp = New PowerPoint.Application
     ppApp.Visible = msoTrue
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.EnableEvents = False
+
+    ' Optional: suppress alerts for the entire run (we'll restore at the end)
+    Dim alertsPrev As Boolean
+    alertsPrev = Application.DisplayAlerts
+    Application.DisplayAlerts = False
 
     Dim i As Long
     For i = 1 To tickersBoth.Count
@@ -70,7 +75,7 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
         BuildMonthlySeries tradeWS, priceWS, tkr, priceByMonth, sharesByMonth, monthList
         If monthList.Count = 0 Then GoTo NextTicker
 
-        '--- Build temp Excel range ---
+        '--- Build temp Excel range for think-cell layout ---
         Dim rngData As Range
         Set rngData = BuildStagingRange(ThisWorkbook, monthList, priceByMonth, sharesByMonth)
 
@@ -81,15 +86,15 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
                     Untitled:=msoTrue, _
                     WithWindow:=msoTrue)
 
-        '--- Update the think-cell chart by name ---
+        '--- Update the think-cell chart by UpdateChart Name ---
         tcXlAddIn.UpdateChart pres, UPDATECHART_NAME, rngData, False
 
-        ' Optional: write ticker label
+        ' Optional: stamp ticker on slide 26 (if you have a text box named "Ticker_Text")
         On Error Resume Next
         pres.Slides(26).Shapes("Ticker_Text").TextFrame2.TextRange.Text = tkr
         On Error GoTo 0
 
-        '--- allow background update to finish ---
+        '--- Allow background update to finish ---
         DoEvents
         Application.Wait (Now + TimeValue("0:00:02"))
 
@@ -115,11 +120,16 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
         End If
         On Error GoTo 0
 
-        '--- Clean up staging sheet ---
+        '--- Clean up staging sheet silently (no prompts) ---
+        On Error Resume Next
         rngData.Worksheet.Delete
+        On Error GoTo 0
 
 NextTicker:
     Next i
+
+    ' Restore alerts
+    Application.DisplayAlerts = alertsPrev
 
     MsgBox "Finished Slide 26 automation for " & tickersBoth.Count & " tickers.", vbInformation
 
@@ -130,6 +140,7 @@ Cleanup:
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
     Application.EnableEvents = True
+    Application.DisplayAlerts = alertsPrev
     Exit Sub
 
 ErrThinkCell:
@@ -138,7 +149,7 @@ ErrThinkCell:
 End Sub
 
 '==========================
-' BUILD STAGING RANGE
+' BUILD STAGING RANGE (for UpdateChart)
 '==========================
 Private Function BuildStagingRange( _
     ByVal hostWb As Workbook, _
@@ -148,8 +159,10 @@ Private Function BuildStagingRange( _
 ) As Range
 
     Dim ws As Worksheet
+    Dim tempName As String
+    tempName = UniqueTempSheetName(hostWb, "tc_stage_")
     Set ws = hostWb.Worksheets.Add(After:=hostWb.Sheets(hostWb.Sheets.Count))
-    ws.Name = UniqueTempSheetName(hostWb, "tc_stage_")
+    ws.Name = tempName
 
     Dim n As Long, i As Long, col As Long
     n = monthList.Count
@@ -157,7 +170,7 @@ Private Function BuildStagingRange( _
     ws.Range("A3").Value = "Stock Price"
     ws.Range("A4").Value = "# trades placed"
 
-    ' Months across row 1
+    ' Months across row 1 (B1..)
     For i = 1 To n
         col = i + 1
         ws.Cells(1, col).Value = MonthKeyToLabel(CLng(monthList(i)))
@@ -187,15 +200,21 @@ Private Function UniqueTempSheetName(ByVal wb As Workbook, ByVal baseName As Str
     Dim i As Long, nm As String
     For i = 1 To 1000
         nm = baseName & i
-        On Error Resume Next
-        wb.Sheets(nm).Name = wb.Sheets(nm).Name
-        If Err.Number <> 0 Then
-            Err.Clear
+        If Not SheetExists(wb, nm) Then
             UniqueTempSheetName = nm
             Exit Function
         End If
     Next i
     UniqueTempSheetName = baseName & Format(Now, "hhmmss")
+End Function
+
+Private Function SheetExists(ByVal wb As Workbook, ByVal name As String) As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = wb.Worksheets(name)
+    SheetExists = Not ws Is Nothing
+    Set ws = Nothing
+    On Error GoTo 0
 End Function
 
 '==========================
@@ -262,7 +281,7 @@ Private Sub BuildMonthlySeries( _
 
     Dim lastRow As Long, r As Long, key As String, monthKey As Long
 
-    ' Trades
+    ' Trades: sum per month (normalize to BOM)
     lastRow = tradeWS.Cells(tradeWS.Rows.Count, iTickerTrades).End(xlUp).Row
     For r = 2 To lastRow
         If StrComp(CStr(tradeWS.Cells(r, iTickerTrades).Value), tkr, vbTextCompare) = 0 Then
@@ -280,7 +299,7 @@ Private Sub BuildMonthlySeries( _
         End If
     Next r
 
-    ' Prices
+    ' Prices: last seen per month (EOM shifted to BOM)
     lastRow = priceWS.Cells(priceWS.Rows.Count, iTickerPrice).End(xlUp).Row
     For r = 2 To lastRow
         If StrComp(CStr(priceWS.Cells(r, iTickerPrice).Value), tkr, vbTextCompare) = 0 Then
@@ -317,7 +336,17 @@ End Sub
 ' UTILITIES
 '==========================
 Private Function NzD(ByVal v As Variant, Optional ByVal def As Double = 0#) As Double
-    If IsError(v) Then NzD = def ElseIf IsNumeric(v) Then NzD = CDbl(v) Else NzD = def
+    If IsError(v) Then
+        NzD = def
+    ElseIf IsNull(v) Or IsEmpty(v) Then
+        NzD = def
+    ElseIf VarType(v) = vbString And Trim$(CStr(v)) = "" Then
+        NzD = def
+    ElseIf IsNumeric(v) Then
+        NzD = CDbl(v)
+    Else
+        NzD = def
+    End If
 End Function
 
 Private Sub QuickSortLong(ByRef arr() As Long, ByVal lo As Long, ByVal hi As Long)
