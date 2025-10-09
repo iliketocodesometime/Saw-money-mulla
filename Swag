@@ -1,9 +1,8 @@
 Option Explicit
 
-' Requires References:
-' - Microsoft PowerPoint XX.0 Object Library
-' - Microsoft Scripting Runtime (for Dictionary)
-
+'==========================
+' CONFIG
+'==========================
 Private Const SRC_WB_NAME As String = "Workplace IQ Test.xlsx"
 Private Const TAB_TRADES As String = "Trading Activity"
 Private Const TAB_PRICE As String = "Stock Price"
@@ -11,15 +10,25 @@ Private Const TAB_PRICE As String = "Stock Price"
 ' >>> SET THESE <<<
 Private Const PPT_TEMPLATE_PATH As String = "C:\Path\To\Your\Template.pptx"
 Private Const OUTPUT_DIR As String = "C:\Path\To\Output\"
-Private Const CHART_SLIDE_INDEX As Long = 26
-Private Const CHART_SHAPE_NAME As String = "Chart26_Combo"
+' This must match the think-cell element's "UpdateChart Name" set in the PPT template (Slide 26)
+Private Const UPDATECHART_NAME As String = "Slide26_Combo"
 
-Public Sub Build_Slide26_All_Tickers()
-    Dim srcWb As Workbook
-    Dim createdWb As Boolean
+'==========================
+' ENTRY POINT
+'==========================
+Public Sub Build_Slide26_All_Tickers_ThinkCell()
+    Dim srcWb As Workbook, createdWb As Boolean
     Dim tradeWS As Worksheet, priceWS As Worksheet
-    
-    ' Open source workbook if not already open
+    Dim ppApp As PowerPoint.Application
+    Dim pres As PowerPoint.Presentation
+    Dim tcXlAddIn As Object                  ' think-cell in Excel (late-bound)
+
+    ' Get the Excel think-cell add-in object
+    On Error GoTo ErrThinkCell
+    Set tcXlAddIn = Application.COMAddIns("thinkcell.addin").Object
+    On Error GoTo 0
+
+    ' Open source workbook if needed
     On Error Resume Next
     Set srcWb = Workbooks(SRC_WB_NAME)
     On Error GoTo 0
@@ -27,62 +36,164 @@ Public Sub Build_Slide26_All_Tickers()
         Set srcWb = Workbooks.Open(ThisWorkbook.Path & Application.PathSeparator & SRC_WB_NAME)
         createdWb = True
     End If
-    
+
     Set tradeWS = srcWb.Worksheets(TAB_TRADES)
     Set priceWS = srcWb.Worksheets(TAB_PRICE)
-    
+
     Dim tickersBoth As Collection
     Set tickersBoth = IntersectTickers(tradeWS, priceWS)
     If tickersBoth.Count = 0 Then
         MsgBox "No common tickers found in both tabs.", vbExclamation
         GoTo Cleanup
     End If
-    
-    Dim i As Long
+
+    ' PowerPoint instance
+    Set ppApp = New PowerPoint.Application
+    ppApp.Visible = msoFalse
+
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.EnableEvents = False
-    
+
+    Dim i As Long
     For i = 1 To tickersBoth.Count
-        Dim tkr As String
-        tkr = CStr(tickersBoth(i))
-        
-        Dim monthList As Collection, priceByMonth As Scripting.Dictionary, sharesByMonth As Scripting.Dictionary
+        Dim tkr As String: tkr = CStr(tickersBoth(i))
+
+        Dim priceByMonth As Scripting.Dictionary
+        Dim sharesByMonth As Scripting.Dictionary
+        Dim monthList As Collection
         Set priceByMonth = New Scripting.Dictionary
         Set sharesByMonth = New Scripting.Dictionary
         Set monthList = New Collection
-        
-        ' Build the month-normalized series for this ticker
+
         BuildMonthlySeries tradeWS, priceWS, tkr, priceByMonth, sharesByMonth, monthList
-        
-        ' If nothing for this ticker, skip
-        If monthList.Count = 0 Then
-            Debug.Print "No data for ticker: " & tkr
-            GoTo NextTicker
-        End If
-        
-        ' Create PPT from template and fill chart
-        WriteTickerToPPT tkr, monthList, priceByMonth, sharesByMonth
-        
+        If monthList.Count = 0 Then GoTo NextTicker
+
+        ' Build a temporary staging sheet with the exact layout A3/A4 + months across row 1
+        Dim rngData As Range
+        Set rngData = BuildStagingRange(ThisWorkbook, monthList, priceByMonth, sharesByMonth)
+
+        ' Open template invisibly
+        Set pres = ppApp.Presentations.Open( _
+                    Filename:=PPT_TEMPLATE_PATH, _
+                    ReadOnly:=msoFalse, _
+                    Untitled:=msoTrue, _
+                    WithWindow:=msoFalse)
+
+        ' Update the think-cell chart by name on the whole presentation
+        ' bTransposed = False because series are in rows, categories (months) across columns
+        tcXlAddIn.UpdateChart pres, UPDATECHART_NAME, rngData, False
+
+        ' Optional: stamp ticker somewhere (requires a named shape or title you manage in template)
+        ' For example, if Slide 26 has a text box named "Ticker_Text", you could add:
+        On Error Resume Next
+        pres.Slides(26).Shapes("Ticker_Text").TextFrame2.TextRange.Text = tkr
+        On Error GoTo 0
+
+        ' Save per ticker
+        Dim outName As String
+        outName = OUTPUT_DIR & CleanFileName(tkr & " - Automated.pptx")
+        pres.SaveAs outName
+        pres.Close
+
+        ' Clear the staging range
+        rngData.Worksheet.Parent.Sheets(rngData.Worksheet.Name).Delete
+
 NextTicker:
     Next i
-    
-    MsgBox "Finished Slide 26 automation for " & tickersBoth.Count & " tickers.", vbInformation
+
+    MsgBox "Finished Slide 26 (think-cell) for " & tickersBoth.Count & " tickers.", vbInformation
 
 Cleanup:
     On Error Resume Next
     If createdWb Then srcWb.Close SaveChanges:=False
+    If Not ppApp Is Nothing Then ppApp.Quit
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
     Application.EnableEvents = True
+    Exit Sub
+
+ErrThinkCell:
+    MsgBox "think-cell not found or not loaded in Excel. Ensure think-cell is installed and enabled." & vbCrLf & _
+           "Error: " & Err.Description, vbCritical
 End Sub
 
-'--- Get tickers that exist in BOTH tabs
+'==========================
+' BUILD THE STAGING RANGE
+'==========================
+Private Function BuildStagingRange( _
+    ByVal hostWb As Workbook, _
+    ByVal monthList As Collection, _
+    ByVal priceByMonth As Scripting.Dictionary, _
+    ByVal sharesByMonth As Scripting.Dictionary _
+) As Range
+
+    Dim ws As Worksheet
+    Set ws = hostWb.Worksheets.Add(After:=hostWb.Sheets(hostWb.Sheets.Count))
+    ws.Name = UniqueTempSheetName(hostWb, "tc_stage_")
+
+    Dim n As Long, i As Long, col As Long
+    n = monthList.Count
+
+    ' Labels
+    ws.Range("A3").Value = "Stock Price"
+    ws.Range("A4").Value = "# trades placed"
+
+    ' Months across row 1, starting at B1
+    For i = 1 To n
+        col = i + 1
+        ws.Cells(1, col).Value = MonthKeyToLabel(CLng(monthList(i)))
+    Next i
+
+    ' Row 3: Prices
+    For i = 1 To n
+        col = i + 1
+        Dim k As String: k = CStr(monthList(i))
+        If priceByMonth.Exists(k) Then ws.Cells(3, col).Value = priceByMonth(k)
+    Next i
+
+    ' Row 4: Total Shares
+    For i = 1 To n
+        col = i + 1
+        Dim k2 As String: k2 = CStr(monthList(i))
+        If sharesByMonth.Exists(k2) Then ws.Cells(4, col).Value = sharesByMonth(k2)
+    Next i
+
+    ' Basic formats (optional)
+    ws.Range(ws.Cells(3, 2), ws.Cells(3, n + 1)).NumberFormat = "0.00"
+    ws.Range(ws.Cells(4, 2), ws.Cells(4, n + 1)).NumberFormat = "0"
+    ws.Range("A1").Value = vbNullString
+
+    ' Return the exact block think-cell expects (include row 1 headers and rows 3-4)
+    ' We'll pass A1 : (n+1, 4) to cover B1.. and the two series rows.
+    Set BuildStagingRange = ws.Range(ws.Cells(1, 1), ws.Cells(4, n + 1))
+End Function
+
+Private Function UniqueTempSheetName(ByVal wb As Workbook, ByVal baseName As String) As String
+    Dim i As Long, nm As String
+    i = 1
+    Do
+        nm = baseName & i
+        On Error Resume Next
+        wb.Worksheets(nm).Name = wb.Worksheets(nm).Name ' provoke error if exists
+        If Err.Number <> 0 Then
+            Err.Clear
+            UniqueTempSheetName = nm
+            Exit Function
+        End If
+        On Error GoTo 0
+        i = i + 1
+    Loop
+End Function
+
+'==========================
+' DATA PREP
+'==========================
 Private Function IntersectTickers(ByVal tradeWS As Worksheet, ByVal priceWS As Worksheet) As Collection
     Dim setA As Scripting.Dictionary, setB As Scripting.Dictionary
     Set setA = UniqueTickers(tradeWS, "Ticker")
     Set setB = UniqueTickers(priceWS, "Ticker")
-    
+
     Dim c As New Collection, k As Variant
     For Each k In setA.Keys
         If setB.Exists(k) Then c.Add k
@@ -90,26 +201,21 @@ Private Function IntersectTickers(ByVal tradeWS As Worksheet, ByVal priceWS As W
     Set IntersectTickers = c
 End Function
 
-'--- Build a dictionary of unique tickers for a given column name
 Private Function UniqueTickers(ByVal ws As Worksheet, ByVal colName As String) As Scripting.Dictionary
     Dim lastRow As Long, colIdx As Long, r As Long
     Dim d As New Scripting.Dictionary
     colIdx = FindColumn(ws, colName)
-    If colIdx = 0 Then
-        Err.Raise vbObjectError + 1, , "Column '" & colName & "' not found in " & ws.Name
-    End If
+    If colIdx = 0 Then Err.Raise vbObjectError + 1, , "Column '" & colName & "' not found in " & ws.Name
+
     lastRow = ws.Cells(ws.Rows.Count, colIdx).End(xlUp).Row
     For r = 2 To lastRow
-        Dim v As Variant
+        Dim v As String
         v = Trim$(CStr(ws.Cells(r, colIdx).Value))
-        If Len(v) > 0 Then
-            If Not d.Exists(v) Then d.Add v, True
-        End If
+        If Len(v) > 0 Then If Not d.Exists(v) Then d.Add v, True
     Next r
     Set UniqueTickers = d
 End Function
 
-'--- Return 1-based column index for a header name (exact match, case-insensitive)
 Private Function FindColumn(ByVal ws As Worksheet, ByVal headerName As String) As Long
     Dim lastCol As Long, c As Long
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
@@ -122,15 +228,13 @@ Private Function FindColumn(ByVal ws As Worksheet, ByVal headerName As String) A
     FindColumn = 0
 End Function
 
-'--- Normalize a date to first of month
 Private Function FirstOfMonth(ByVal d As Date) As Date
     FirstOfMonth = DateSerial(Year(d), Month(d), 1)
 End Function
 
-'--- Build month-level series for a ticker:
-'    priceByMonth(monthKey) = Double (closing price)
-'    sharesByMonth(monthKey) = Double (sum of Total Shares)
-'    monthList = sorted collection of monthKeys (yyyymm as Long)
+' priceByMonth(key "yyyymm") = last Price in month (EOM shifted to BOM)
+' sharesByMonth(key "yyyymm") = sum of Total Shares in month
+' monthList = sorted ascending yyyymm (Long)
 Private Sub BuildMonthlySeries( _
     ByVal tradeWS As Worksheet, _
     ByVal priceWS As Worksheet, _
@@ -141,35 +245,31 @@ Private Sub BuildMonthlySeries( _
 )
     Dim iTickerTrades As Long, iDateTrades As Long, iShares As Long
     Dim iTickerPrice As Long, iDatePrice As Long, iPrice As Long
-    
+
     iTickerTrades = FindColumn(tradeWS, "Ticker")
     iDateTrades = FindColumn(tradeWS, "TRADE_EXEC_DT")
     iShares = FindColumn(tradeWS, "Total Shares")
-    
+
     iTickerPrice = FindColumn(priceWS, "Ticker")
     iDatePrice = FindColumn(priceWS, "Date")
     iPrice = FindColumn(priceWS, "Price")
-    
+
     If iTickerTrades * iDateTrades * iShares * iTickerPrice * iDatePrice * iPrice = 0 Then
         Err.Raise vbObjectError + 2, , "One or more required columns are missing."
     End If
-    
+
     Dim lastRow As Long, r As Long
-    Dim key As String, monthKey As Long
-    
-    ' --- Trades: sum Total Shares per month
+    Dim monthKey As Long, key As String
+
+    ' Trades: sum per month (dates already BOM per your spec, normalize anyway)
     lastRow = tradeWS.Cells(tradeWS.Rows.Count, iTickerTrades).End(xlUp).Row
     For r = 2 To lastRow
         If StrComp(CStr(tradeWS.Cells(r, iTickerTrades).Value), tkr, vbTextCompare) = 0 Then
             If IsDate(tradeWS.Cells(r, iDateTrades).Value) Then
-                Dim dT As Date
-                dT = CDate(tradeWS.Cells(r, iDateTrades).Value)
-                ' Already first-of-month per spec, but normalize anyway
-                dT = FirstOfMonth(dT)
+                Dim dT As Date: dT = FirstOfMonth(CDate(tradeWS.Cells(r, iDateTrades).Value))
                 monthKey = CLng(Year(dT) * 100 + Month(dT))
                 key = CStr(monthKey)
-                Dim sh As Double
-                sh = NzD(tradeWS.Cells(r, iShares).Value)
+                Dim sh As Double: sh = NzD(tradeWS.Cells(r, iShares).Value)
                 If sharesByMonth.Exists(key) Then
                     sharesByMonth(key) = sharesByMonth(key) + sh
                 Else
@@ -178,51 +278,41 @@ Private Sub BuildMonthlySeries( _
             End If
         End If
     Next r
-    
-    ' --- Price: take last price for month (if multiple rows, we keep the last seen)
+
+    ' Price: take last value seen per month (EOM shifted to BOM)
     lastRow = priceWS.Cells(priceWS.Rows.Count, iTickerPrice).End(xlUp).Row
     For r = 2 To lastRow
         If StrComp(CStr(priceWS.Cells(r, iTickerPrice).Value), tkr, vbTextCompare) = 0 Then
             If IsDate(priceWS.Cells(r, iDatePrice).Value) Then
-                Dim dP As Date
-                dP = CDate(priceWS.Cells(r, iDatePrice).Value)
-                ' EOM per spec → shift to BOM
-                dP = FirstOfMonth(dP)
+                Dim dP As Date: dP = FirstOfMonth(CDate(priceWS.Cells(r, iDatePrice).Value))
                 monthKey = CLng(Year(dP) * 100 + Month(dP))
                 key = CStr(monthKey)
                 priceByMonth(key) = NzD(priceWS.Cells(r, iPrice).Value)
             End If
         End If
     Next r
-    
-    ' --- Build union of months present in either series & sort ascending
-    Dim k As Variant, dTmp As Scripting.Dictionary
-    Set dTmp = New Scripting.Dictionary
-    For Each k In sharesByMonth.Keys
-        dTmp(k) = True
+
+    ' Union & sort months
+    Dim dTmp As New Scripting.Dictionary, k As Variant
+    For Each k In sharesByMonth.Keys: dTmp(k) = True: Next k
+    For Each k In priceByMonth.Keys: If Not dTmp.Exists(k) Then dTmp.Add k, True
     Next k
-    For Each k In priceByMonth.Keys
-        If Not dTmp.Exists(k) Then dTmp.Add k, True
-    Next k
-    
     If dTmp.Count = 0 Then Exit Sub
-    
+
     Dim arr() As Long, idx As Long
     ReDim arr(1 To dTmp.Count)
     idx = 1
     For Each k In dTmp.Keys
-        arr(idx) = CLng(k)
-        idx = idx + 1
+        arr(idx) = CLng(k): idx = idx + 1
     Next k
     QuickSortLong arr, LBound(arr), UBound(arr)
-    
+
     Dim i As Long
     For i = LBound(arr) To UBound(arr)
         monthList.Add arr(i)
     Next i
 End Sub
 
-'--- Safely get double
 Private Function NzD(ByVal v As Variant, Optional ByVal def As Double = 0#) As Double
     If IsError(v) Then
         NzD = def
@@ -233,124 +323,9 @@ Private Function NzD(ByVal v As Variant, Optional ByVal def As Double = 0#) As D
     End If
 End Function
 
-'--- Write one ticker into PPT Slide 26 think-cell chart
-Private Sub WriteTickerToPPT( _
-    ByVal tkr As String, _
-    ByVal monthList As Collection, _
-    ByVal priceByMonth As Scripting.Dictionary, _
-    ByVal sharesByMonth As Scripting.Dictionary _
-)
-    Dim ppApp As PowerPoint.Application
-    Dim ppPres As PowerPoint.Presentation
-    Dim ppSld As PowerPoint.Slide
-    Dim shp As PowerPoint.Shape
-    Dim ch As PowerPoint.Chart
-    
-    ' open template
-    Set ppApp = GetOrCreatePPT
-    Set ppPres = ppApp.Presentations.Open(PPT_TEMPLATE_PATH, WithWindow:=msoFalse)
-    Set ppSld = ppPres.Slides(CHART_SLIDE_INDEX)
-    
-    Set shp = Nothing
-    On Error Resume Next
-    Set shp = ppSld.Shapes(CHART_SHAPE_NAME)
-    On Error GoTo 0
-    If shp Is Nothing Then
-        Err.Raise vbObjectError + 3, , "Shape '" & CHART_SHAPE_NAME & "' not found on Slide " & CHART_SLIDE_INDEX
-    End If
-    
-    If shp.HasChart = msoFalse Then
-        Err.Raise vbObjectError + 4, , "Shape '" & CHART_SHAPE_NAME & "' is not a chart."
-    End If
-    
-    Set ch = shp.Chart
-    
-    ' Edit the embedded datasheet
-    ch.ChartData.Activate
-    Dim edWb As Excel.Workbook
-    Dim edWs As Excel.Worksheet
-    Set edWb = ch.ChartData.Workbook
-    Set edWs = edWb.Worksheets(1)
-    
-    ' Clear existing
-    edWs.Cells.Clear
-    
-    ' Layout per your spec:
-    '   Row 1: months in B1:BR1
-    '   A3: "Stock Price"; row 3 values
-    '   A4: "# trades placed" (we'll label "Total Shares"); row 4 values
-    ' (We’ll auto-size columns based on count.)
-    edWs.Range("A3").Value = "Stock Price"
-    edWs.Range("A4").Value = "Total Shares"
-    
-    Dim n As Long, i As Long, col As Long
-    n = monthList.Count
-    
-    ' Write month headers as text "MMM YYYY" in Row 1 starting Col 2
-    For i = 1 To n
-        col = i + 1
-        edWs.Cells(1, col).Value = MonthKeyToLabel(CLng(monthList(i)))
-    Next i
-    
-    ' Write Stock Price row (Row 3)
-    For i = 1 To n
-        col = i + 1
-        Dim key As String
-        key = CStr(monthList(i))
-        If priceByMonth.Exists(key) Then
-            edWs.Cells(3, col).Value = priceByMonth(key)
-        Else
-            edWs.Cells(3, col).Value = vbNullString ' blank if missing
-        End If
-    Next i
-    
-    ' Write Total Shares row (Row 4)
-    For i = 1 To n
-        col = i + 1
-        Dim key2 As String
-        key2 = CStr(monthList(i))
-        If sharesByMonth.Exists(key2) Then
-            edWs.Cells(4, col).Value = sharesByMonth(key2)
-        Else
-            edWs.Cells(4, col).Value = vbNullString
-        End If
-    Next i
-    
-    ' Optional: set number formats
-    edWs.Range(edWs.Cells(3, 2), edWs.Cells(3, n + 1)).NumberFormat = "0.00"
-    edWs.Range(edWs.Cells(4, 2), edWs.Cells(4, n + 1)).NumberFormat = "0"
-    
-    ' Optional: header in A1 is unused by your think-cell config; leave blank
-    edWs.Range("A1").Value = vbNullString
-    
-    ' Close datasheet edit
-    edWb.Application.CutCopyMode = False
-    ch.ChartData.Workbook.Close
-    ch.Refresh
-    
-    ' Optional: set title or a text placeholder on the slide to show ticker
-    On Error Resume Next
-    ppSld.Shapes("Ticker_Text").TextFrame2.TextRange.Text = tkr
-    On Error GoTo 0
-    
-    ' Save deck
-    Dim outName As String
-    outName = OUTPUT_DIR & CleanFileName(tkr & " - Automated.pptx")
-    ppPres.SaveAs outName
-    ppPres.Close
-End Sub
-
-'--- Get or create PPT application
-Private Function GetOrCreatePPT() As PowerPoint.Application
-    On Error Resume Next
-    Set GetOrCreatePPT = GetObject(, "PowerPoint.Application")
-    If GetOrCreatePPT Is Nothing Then
-        Set GetOrCreatePPT = New PowerPoint.Application
-    End If
-    GetOrCreatePPT.Visible = msoTrue
-End Function
-
-'--- QuickSort helper for Long array (ascending)
+'==========================
+' UTIL
+'==========================
 Private Sub QuickSortLong(ByRef arr() As Long, ByVal lo As Long, ByVal hi As Long)
     Dim i As Long, j As Long, pivot As Long, tmp As Long
     i = lo: j = hi
@@ -367,7 +342,6 @@ Private Sub QuickSortLong(ByRef arr() As Long, ByVal lo As Long, ByVal hi As Lon
     If i < hi Then QuickSortLong arr, i, hi
 End Sub
 
-'--- Convert yyyymm (as Long) to "MMM YYYY"
 Private Function MonthKeyToLabel(ByVal yyyymm As Long) As String
     Dim y As Integer, m As Integer
     y = CInt(yyyymm \ 100)
@@ -375,7 +349,6 @@ Private Function MonthKeyToLabel(ByVal yyyymm As Long) As String
     MonthKeyToLabel = Format(DateSerial(y, m, 1), "MMM YYYY")
 End Function
 
-'--- Clean filename of invalid characters
 Private Function CleanFileName(ByVal s As String) As String
     Dim bad As Variant, i As Long
     bad = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
@@ -384,4 +357,3 @@ Private Function CleanFileName(ByVal s As String) As String
     Next i
     CleanFileName = s
 End Function
-
