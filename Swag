@@ -10,8 +10,10 @@ Private Const TAB_PRICE As String = "Stock Price"
 ' >>> SET THESE <<<
 Private Const PPT_TEMPLATE_PATH As String = "C:\Path\To\Your\Template.pptx"
 Private Const OUTPUT_DIR As String = "C:\Path\To\Output\"
-' think-cell chart’s “UpdateChart Name” on Slide 26 (you said this is already set to Chart26)
-Private Const UPDATECHART_NAME As String = "Chart26"
+
+' Slide 26 optional textboxes (rename in Selection Pane or change names here)
+Private Const TICKER_SHAPE_NAME As String = "Ticker_Text"
+Private Const CAPTION_SHAPE_NAME As String = "Correlation_Caption"
 
 '==========================
 ' MAIN ENTRY POINT
@@ -51,14 +53,16 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
     Set ppApp = New PowerPoint.Application
     ppApp.Visible = msoTrue
 
+    ' Speed/safety settings
+    Dim prevCalc As XlCalculation, prevScreen As Boolean, prevEvents As Boolean, prevAlerts As Boolean
+    prevCalc = Application.Calculation
+    prevScreen = Application.ScreenUpdating
+    prevEvents = Application.EnableEvents
+    prevAlerts = Application.DisplayAlerts
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.EnableEvents = False
-
-    ' Optional: suppress alerts for the entire run (we'll restore at the end)
-    Dim alertsPrev As Boolean
-    alertsPrev = Application.DisplayAlerts
-    Application.DisplayAlerts = False
+    Application.DisplayAlerts = False   ' suppress sheet delete prompts during run
 
     Dim i As Long
     For i = 1 To tickersBoth.Count
@@ -86,15 +90,29 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
                     Untitled:=msoTrue, _
                     WithWindow:=msoTrue)
 
-        '--- Update the think-cell chart by UpdateChart Name ---
-        tcXlAddIn.UpdateChart pres, UPDATECHART_NAME, rngData, False
+        '--- Update the think-cell chart by UpdateChart Name (YOUR EXACT REQUEST) ---
+        tcXlAddIn.UpdateChart pres, "Slide26_Combo", rngData, False
 
-        ' Optional: stamp ticker on slide 26 (if you have a text box named "Ticker_Text")
+        ' Optional: stamp ticker on slide 26
         On Error Resume Next
-        pres.Slides(26).Shapes("Ticker_Text").TextFrame2.TextRange.Text = tkr
+        pres.Slides(26).Shapes(TICKER_SHAPE_NAME).TextFrame2.TextRange.Text = tkr
         On Error GoTo 0
 
-        '--- Allow background update to finish ---
+        ' --- Build correlation caption and write it ---
+        Dim arrP() As Double, arrS() As Double, nOverlap As Long, rVal As Double, cap As String
+        BuildOverlapArrays monthList, priceByMonth, sharesByMonth, arrP, arrS, nOverlap
+
+        If TryPearsonR(arrP, arrS, nOverlap, rVal) Then
+            cap = MakeCorrelationCaption(tkr, nOverlap, rVal)
+        Else
+            cap = "Correlation analysis: not enough variation or overlapping months to assess a relationship."
+        End If
+
+        On Error Resume Next
+        pres.Slides(26).Shapes(CAPTION_SHAPE_NAME).TextFrame2.TextRange.Text = cap
+        On Error GoTo 0
+
+        '--- allow background update to finish ---
         DoEvents
         Application.Wait (Now + TimeValue("0:00:02"))
 
@@ -120,7 +138,7 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
         End If
         On Error GoTo 0
 
-        '--- Clean up staging sheet silently (no prompts) ---
+        '--- Clean up staging sheet silently ---
         On Error Resume Next
         rngData.Worksheet.Delete
         On Error GoTo 0
@@ -128,24 +146,16 @@ Public Sub Build_Slide26_All_Tickers_ThinkCell()
 NextTicker:
     Next i
 
-    ' Restore alerts
-    Application.DisplayAlerts = alertsPrev
-
     MsgBox "Finished Slide 26 automation for " & tickersBoth.Count & " tickers.", vbInformation
 
 Cleanup:
     On Error Resume Next
     If createdWb Then srcWb.Close SaveChanges:=False
     If Not ppApp Is Nothing Then ppApp.Quit
-    Application.ScreenUpdating = True
-    Application.Calculation = xlCalculationAutomatic
-    Application.EnableEvents = True
-    Application.DisplayAlerts = alertsPrev
-    Exit Sub
-
-ErrThinkCell:
-    MsgBox "think-cell not found or not loaded in Excel. Ensure think-cell is installed and enabled." _
-        & vbCrLf & "Error: " & Err.Description, vbCritical
+    Application.ScreenUpdating = prevScreen
+    Application.Calculation = prevCalc
+    Application.EnableEvents = prevEvents
+    Application.DisplayAlerts = prevAlerts
 End Sub
 
 '==========================
@@ -331,6 +341,116 @@ Private Sub BuildMonthlySeries( _
         monthList.Add arr(i)
     Next i
 End Sub
+
+'==========================
+' CORRELATION HELPERS
+'==========================
+' Build aligned arrays (same months, both values present)
+Private Sub BuildOverlapArrays( _
+    ByVal monthList As Collection, _
+    ByVal priceByMonth As Scripting.Dictionary, _
+    ByVal sharesByMonth As Scripting.Dictionary, _
+    ByRef x() As Double, _
+    ByRef y() As Double, _
+    ByRef n As Long _
+)
+    Dim i As Long
+    Dim key As String
+    Dim tmpX() As Double, tmpY() As Double
+    ReDim tmpX(1 To monthList.Count)
+    ReDim tmpY(1 To monthList.Count)
+
+    n = 0
+    For i = 1 To monthList.Count
+        key = CStr(monthList(i))
+        If priceByMonth.Exists(key) And sharesByMonth.Exists(key) Then
+            If IsNumeric(priceByMonth(key)) And IsNumeric(sharesByMonth(key)) Then
+                If Not IsEmpty(priceByMonth(key)) And Not IsEmpty(sharesByMonth(key)) Then
+                    n = n + 1
+                    tmpX(n) = CDbl(priceByMonth(key))   ' Stock Price
+                    tmpY(n) = CDbl(sharesByMonth(key)) ' Trading Activity (Total Shares)
+                End If
+            End If
+        End If
+    Next i
+
+    If n >= 1 Then
+        ReDim x(1 To n)
+        ReDim y(1 To n)
+        For i = 1 To n
+            x(i) = tmpX(i)
+            y(i) = tmpY(i)
+        Next i
+    Else
+        ReDim x(1 To 1)
+        ReDim y(1 To 1)
+    End If
+End Sub
+
+' Compute Pearson correlation r
+Private Function TryPearsonR( _
+    ByRef x() As Double, _
+    ByRef y() As Double, _
+    ByVal n As Long, _
+    ByRef r As Double _
+) As Boolean
+    Dim i As Long
+    Dim sumX As Double, sumY As Double, sumX2 As Double, sumY2 As Double, sumXY As Double
+    If n < 3 Then
+        TryPearsonR = False
+        Exit Function
+    End If
+    For i = 1 To n
+        sumX = sumX + x(i)
+        sumY = sumY + y(i)
+        sumX2 = sumX2 + x(i) * x(i)
+        sumY2 = sumY2 + y(i) * y(i)
+        sumXY = sumXY + x(i) * y(i)
+    Next i
+    Dim denom As Double
+    denom = Sqr((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY))
+    If denom = 0 Then
+        TryPearsonR = False
+        Exit Function
+    End If
+    r = (n * sumXY - sumX * sumY) / denom
+    TryPearsonR = True
+End Function
+
+' Turn r and sample size into a friendly caption
+Private Function MakeCorrelationCaption( _
+    ByVal tkr As String, _
+    ByVal n As Long, _
+    ByVal r As Double _
+) As String
+    Dim absr As Double: absr = Abs(r)
+    Dim strength As String, direction As String
+
+    If n < 3 Then
+        MakeCorrelationCaption = "Correlation analysis: not enough overlapping months to assess a relationship."
+        Exit Function
+    End If
+
+    If r >= 0 Then
+        direction = "positive"
+    Else
+        direction = "negative"
+    End If
+
+    ' Strength bins (adjust as desired)
+    If absr >= 0.7 Then
+        strength = "strong"
+    ElseIf absr >= 0.4 Then
+        strength = "moderate"
+    ElseIf absr >= 0.2 Then
+        strength = "weak"
+    Else
+        MakeCorrelationCaption = "Correlation analysis (" & n & " months): little to no relationship between stock price and trading activity (r=" & Format(r, "+0.00;-0.00;0.00") & ")."
+        Exit Function
+    End If
+
+    MakeCorrelationCaption = "Correlation analysis (" & n & " months): " & strength & " " & direction & " relationship between stock price and trading activity (r=" & Format(r, "+0.00;-0.00;0.00") & ")."
+End Function
 
 '==========================
 ' UTILITIES
