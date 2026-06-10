@@ -1,1 +1,46 @@
+Most likely issue: the value is not exactly "Reinvestment Director" anymore.
 
+Your code does this exact comparison:
+
+df["DIRECTOR_ROLE__C"] == "Reinvestment Director"
+
+That fails if Salesforce/Dataiku now has:
+
+reinvestment director
+Reinvestment Director 
+REINVESTMENT DIRECTOR
+Reinvestment Director   # hidden non-breaking space
+
+Fix it by normalizing the field like you did for TYPE:
+
+role = (
+    df["DIRECTOR_ROLE__C"]
+    .fillna("")
+    .astype(str)
+    .str.replace("\u00A0", " ", regex=False)
+    .str.strip()
+    .str.upper()
+)
+director_c = df["DIRECTOR__C"].fillna("").astype(str).str.strip()
+df["Director"] = np.where(
+    role.eq("REINVESTMENT DIRECTOR"),
+    "IRM Assigned",
+    np.where(
+        director_c.eq(""),
+        "Other",
+        df["DIRECTOR__C"]
+    )
+)
+
+Also run this quick debug:
+
+df["DIRECTOR_ROLE__C"].dropna().astype(str).value_counts().head(20)
+
+And specifically:
+
+df.loc[
+    df["DIRECTOR_ROLE__C"].astype(str).str.contains("reinvestment", case=False, na=False),
+    ["DIRECTOR_ROLE__C", "DIRECTOR__C"]
+].head(20)
+
+If those rows show up, your exact string match was the problem.
